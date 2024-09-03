@@ -1,0 +1,85 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "files": {
+    "ignore": ["node_modules", "dist", "build", "proxy"]
+  },
+  "formatter": {
+    "enabled": true,
+    "formatWithErrors": false,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineEnding": "lf",
+    "lineWidth": 120,
+    "attributePosition": "auto",
+    "ignore": ["**/src/blockchain/abi", "**/src/blockchain/type"]
+  },
+  "organizeImports": {
+    "enabled": true
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "complexity": {
+        "noBannedTypes": "off",
+        "noStaticOnlyClass": "off",
+        "noThisInStatic": "off",
+        "noForEach": "off",
+        "useLiteralKeys": "off",
+        "noUselessEmptyExport": "off"
+      },
+      "performance": {
+        "noAccumulatingSpread": "off"
+      },
+      "style": {
+        "noUselessElse": "warn",
+        "useNumberNamespace": "off",
+        "useNodejsImportProtocol": "off",
+        "noInferrableTypes": "off",
+        "useConst": "off",
+        "noParameterAssign": "off",
+        "noNonNullAssertion": "off",
+        "noUnusedTemplateLiteral": "off",
+        "useEnumInitializers": "off",
+        "useImportType": {
+          "level": "off",
+          "fix": "safe"
+        },
+        "useTemplate": {
+          "level": "off",
+          "fix": "unsafe"
+        }
+      },
+      "suspicious": {
+        "noThenProperty": "off",
+        "noGlobalIsNan": "off",
+        "noAssignInExpressions": "off",
+        "noExplicitAny": "off"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "jsxQuoteStyle": "double",
+      "quoteProperties": "asNeeded",
+      "trailingCommas": "all",
+      "semicolons": "always",
+      "arrowParentheses": "always",
+      "bracketSpacing": true,
+      "bracketSameLine": false,
+      "quoteStyle": "double",
+      "attributePosition": "auto",
+      "lineWidth": 120
+    }
+  },
+  "overrides": [
+    {
+      "include": ["*.json"],
+      "formatter": {
+        "enabled": true,
+        "indentStyle": "space",
+        "lineWidth": 120
+      }
+    }
+  ]
+}

@@ -1,9 +1,7 @@
-import { Node } from "../node/RPCNode";
-import { IContact, IKBucketOptions } from "./types";
+import { IContact, IKBucketOptions } from "../neighbours/types";
 
 export class KBucket {
   private readonly maxContacts: number;
-  private readonly node: Node;
   private contacts: Array<IContact>;
 
   constructor(options: IKBucketOptions) {
@@ -15,8 +13,8 @@ export class KBucket {
     return this.contacts;
   }
 
-  public async updateContact(contact: IContact) {
-    const current = this.contacts.find((c) => c.nodeId.equals(contact.nodeId));
+  public updateContact(contact: IContact) {
+    const current = this.contacts.find((c) => c.nodeId === contact.nodeId);
 
     if (current) {
       this.moveToEnd(current);
@@ -28,13 +26,13 @@ export class KBucket {
       return;
     }
 
-    try {
-      await this.node.ping(this.contacts[0]);
-    } catch (e) {
-      // TODO: separate timeout and other errors
-      this.contacts.shift();
-      this.contacts.push(contact);
-    }
+    // try {
+    //     await this.node.ping(this.contacts[0]);
+    // } catch (e) {
+    //     // TODO: separate timeout and other errors
+    //     this.contacts.shift();
+    //     this.contacts.push(contact);
+    // }
   }
 
   private moveToEnd(contact: IContact) {

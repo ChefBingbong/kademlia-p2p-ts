@@ -1,7 +1,7 @@
 import { BinaryLike, createHash } from "crypto";
 import { RemoteInfo } from "dgram";
 import * as Mathjs from "mathjs";
-import { IContact } from "../contacts/types";
+// import { IContact } from "../contacts/types";
 import { BIT_SIZE, HASH_SIZE } from "./constants";
 // * Create a mask with all bits set except MSB using bitwise operations
 // * Perform bitwise AND between key and mask for hashing
@@ -89,9 +89,9 @@ export function sha1(str: BinaryLike) {
   return createHash("sha1").update(str);
 }
 
-export function makeContact(hexNodeId: string, info: RemoteInfo): IContact {
+export function makeContact(hexNodeId: string, info: RemoteInfo): any {
   return {
-    nodeId: Buffer.from(hexNodeId, "hex"),
+    nodeId: Number(hexNodeId),
     ip: info.address,
     port: info.port,
   };

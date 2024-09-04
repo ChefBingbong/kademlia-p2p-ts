@@ -1,7 +1,7 @@
 export interface IContact {
   ip: string;
   port: number;
-  nodeId: Buffer;
+  nodeId: string;
 }
 
 export interface IKBucketOptions {
@@ -24,24 +24,15 @@ export interface IRPCArguments {
   STORE: IStoreMessage;
   FIND_VALUE: IFindValue;
   FIND_NODE: IFindNode;
-  // biome-ignore lint/suspicious/noConfusingVoidType: <explanation>
   PING: void;
-  REPLY:
-    | IResult["STORE"]
-    | IResult["FIND_NODE"]
-    | IResult["FIND_NODE"]
-    // biome-ignore lint/suspicious/noConfusingVoidType: <explanation>
-    | void;
+  REPLY: IResult["STORE"] | IResult["FIND_NODE"] | IResult["FIND_NODE"] | void;
 }
 
 export interface IResult {
-  // biome-ignore lint/suspicious/noConfusingVoidType: <explanation>
   STORE: void;
   FIND_VALUE: string;
   FIND_NODE: Array<IContact>;
-  // biome-ignore lint/suspicious/noConfusingVoidType: <explanation>
   PING: void;
-  // biome-ignore lint/suspicious/noConfusingVoidType: <explanation>
   REPLY: void;
 }
 

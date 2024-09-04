@@ -3,12 +3,12 @@ import * as z from "zod";
 
 const envsSchema = z.object({
   NODE_ENV: z.enum(["production", "development", "test"]),
-  PORT: z.string(),
+  // PORT: z.string(),
 });
 
 const envVars = {
   NODE_ENV: process.env.NODE_ENV,
-  PORT: process.env.PORT,
+  // PORT: process.env.PORT,
 };
 
 try {
@@ -21,5 +21,5 @@ try {
 // map env vars and make it visible outside module
 export default {
   env: envVars.NODE_ENV,
-  port: envVars.PORT,
+  // port: envVars.PORT,
 };

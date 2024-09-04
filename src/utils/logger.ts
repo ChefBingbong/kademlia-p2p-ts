@@ -1,6 +1,5 @@
-import { createLogger, format, type Logger, transports } from "winston";
+import { type Logger, createLogger, format, transports } from "winston";
 import type * as Transport from "winston-transport";
-import config from "../config/config";
 
 export class AppLogger {
   private logger: Logger;

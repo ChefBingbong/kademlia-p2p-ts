@@ -1,8 +1,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
-import type QueryString from "qs";
 
 export const validateRequestMiddleware = <T>(
-  toDto: (query: QueryString.ParsedQs) => T | undefined,
+  toDto: (query: any) => T | undefined,
   validationFunc: (request: T) => { success: boolean; data: string | T },
   value: string | "body" | "query" | "params" = "body",
   skipDto = false,

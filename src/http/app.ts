@@ -16,10 +16,10 @@ export class App extends AppLogger {
   public port: string | number;
   static log: Logger;
 
-  constructor() {
+  constructor(port: number) {
     super();
     this.app = express();
-    this.port = config.port;
+    this.port = port;
 
     this.configureMiddlewares();
     this.configureRoutes();

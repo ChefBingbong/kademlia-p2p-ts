@@ -1,121 +1,44 @@
 import * as dgram from "dgram";
 import { Socket } from "dgram";
 import express from "express";
-import { Contacts } from "../neighbours/neighbours";
-import { IContact } from "../neighbours/types";
+import { KBucket } from "../kBucket/kBucket";
+import { TType } from "../neighbours/types";
 // import { Neighbours } from "../contacts/contacts";
 // import { IContact } from "../contacts/types";
-import { PORT_NUMBER } from "./constants";
-import { sha1 } from "./utils";
+import { BIT_SIZE } from "./constants";
 
 type NodeID = string; // Node ID as a string, typically represented as a hexadecimal string
 type Contact = { nodeId: NodeID; ip: string; port: number };
 
+export function getIdealDistance() {
+  const IDEAL_DISTANCE: number[] = [];
+  for (let i = 0; i < BIT_SIZE; i++) {
+    const val = 2 ** i;
+    IDEAL_DISTANCE.push(val);
+  }
+  return IDEAL_DISTANCE;
+}
 class KademliaNode {
   //   public nodeId: number;
-  public ipAddress: string = "localhost";
+  public peers: Map<number, number>;
+  public address: string;
   public port: number;
-  public nodeId: NodeID;
-  private readonly contacts: Contacts;
+  public nodeId: number;
+  private readonly buckets: Map<number, KBucket>;
 
   private app = express();
   private socket: Socket;
+  private rpcMap: Map<string, { resolve: Function; type: TType }>;
 
   constructor(id: number, port: number) {
-    this.nodeId = sha1(`127.0.0.1:${port}`).digest("hex");
+    this.nodeId = id;
     this.port = port;
-    this.contacts = new Contacts();
+    this.address = "127.0.0.1";
+    this.table = new Map();
+    this.buckets = new Map();
     this.socket = dgram.createSocket("udp4");
     this.socket.on("message", this.handleRPC);
   }
-
-  public async start() {
-    try {
-      this.socket.bind(this.port, () => {
-        this.contacts.setMe(this.contact());
-        const bootstrap = {
-          ip: "127.0.0.1",
-          port: PORT_NUMBER,
-          nodeId: sha1(`127.0.0.1:${PORT_NUMBER}`).digest("hex"),
-        };
-        this.send(bootstrap, "PING", this.contact());
-      });
-    } catch (err) {
-      console.log(err);
-    }
-  }
-
-  public contact(): IContact {
-    const address = this.socket.address();
-
-    return {
-      nodeId: this.nodeId,
-      ip: address.address,
-      port: address.port,
-    };
-  }
-  private send = (contact: any, type: any, data: any) => {
-    const message = JSON.stringify({
-      type,
-      data: data,
-      fromNodeId: this.nodeId,
-    });
-
-    this.socket.send(message, contact.port, contact.ip);
-  };
-
-  private handleRPC = (msg: Buffer, info: dgram.RemoteInfo) => {
-    try {
-      const message = JSON.parse(msg.toString());
-      const remoteContact = makeContact(message.fromNodeId, info);
-      this.contacts.addContacts(remoteContact);
-
-      // console.log("r reply", remoteContact);
-
-      switch (message.type) {
-        case "REPLY":
-          console.log("recieved reply", this.contacts.contacts);
-          break;
-        case "PING": {
-          this.send(remoteContact, "REPLY", this.contact());
-          break;
-        }
-        //   case 'STORE':
-        //       await this.contacts.store(message as TStoreRPC, info);
-        //       await this.replyRPC(remoteContact, {rpcId: message.rpcId});
-        //       break;
-        //   case 'FIND_NODE':
-        //       const contacts = this.contacts.findNode(remoteContact.nodeId);
-        //       await this.sendNodes(message.rpcId, remoteContact, contacts);
-        //       break;
-        //   case 'FIND_VALUE':
-        //       const result = await this.contacts.findValue((message as TFindValueRPC).data.key);
-        //       if (Array.isArray(result)) {
-        //           await this.sendNodes(message.rpcId, remoteContact, result);
-        //       } else {
-        //           await this.sendValue(message.rpcId, remoteContact, result);
-        //       }
-        //       break;
-        default:
-          // TODO: log, throw exception
-          return;
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  public close() {
-    this.socket.removeAllListeners("message");
-    this.socket.close();
-  }
 }
 
-export function makeContact(hexNodeId: string, info: dgram.RemoteInfo): any {
-  return {
-    nodeId: hexNodeId,
-    ip: info.address,
-    port: info.port,
-  };
-}
 export default KademliaNode;

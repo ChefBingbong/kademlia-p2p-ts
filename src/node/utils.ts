@@ -55,6 +55,16 @@ export function xor(a: Buffer, b: Buffer) {
   return buffer;
 }
 
+export function getKBucketIndex(nodeId: number, targetId: number): number {
+  // XOR the two IDs to find the distance
+  const xorResult = nodeId ^ targetId;
+
+  for (let i = 3; i >= 0; i--) {
+    if (xorResult & (1 << i)) return i;
+  }
+  return 0;
+}
+
 export function bucketIndex(a: Buffer, b: Buffer) {
   const d = xor(a, b);
   let B = HASH_SIZE;

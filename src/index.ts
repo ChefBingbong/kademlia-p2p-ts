@@ -29,14 +29,17 @@ async function main() {
   // ! Create multiple node instances with unique IDs and ports
 
   if (config.port === "3000") {
-    const bootStrap = new KademliaNode(0, 3000);
+    const bootStrap2 = new KademliaNode(0, 2999);
+    const bootStrap = new KademliaNode(0, 2998);
+    bootStrap2.start();
     bootStrap.start();
-  } else {
-    const node = new KademliaNode(randomInt(10), Number(config.port));
-    await node.start();
-
-    //     console.log(node.contacts.buckets);
   }
+
+  for (let i = 0; i < 10; i++) {
+    const node = new KademliaNode(randomInt(10), Number(config.port + i));
+    await node.start();
+  }
+  //     console.log(node.contacts.buckets);
 }
 
 main().catch((error) => {

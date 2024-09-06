@@ -1,41 +1,36 @@
-import { IContact, IKBucketOptions } from "../neighbours/types";
+import { BIT_SIZE } from "../node/constants";
 
 export class KBucket {
-  private readonly maxContacts: number;
-  private contacts: Array<IContact>;
+  public bucketSize: number = BIT_SIZE;
+  public parentNodeId: number;
+  public bucketId: number;
+  public nodes: number[];
 
-  constructor(options: IKBucketOptions) {
-    this.maxContacts = options.maxContacts;
-    this.contacts = [];
+  constructor(bucketId: number, parentNodeId: number) {
+    this.bucketId = bucketId;
+    this.parentNodeId = parentNodeId;
+    this.nodes = [];
   }
 
-  public getContacts(): Array<IContact> {
-    return this.contacts;
+  public getNodes(): Array<number> {
+    return this.nodes;
   }
 
-  public updateContact(contact: IContact) {
-    const current = this.contacts.find((c) => c.nodeId === contact.nodeId);
+  public updateBucketNode(nodeId: number) {
+    const current = this.nodes.find((n) => n === nodeId);
 
     if (current) {
       this.moveToEnd(current);
       return;
     }
 
-    if (this.contacts.length < this.maxContacts) {
-      this.contacts.push(contact);
+    if (this.nodes.length < this.bucketSize) {
+      this.nodes.push(nodeId);
       return;
     }
-
-    // try {
-    //     await this.node.ping(this.contacts[0]);
-    // } catch (e) {
-    //     // TODO: separate timeout and other errors
-    //     this.contacts.shift();
-    //     this.contacts.push(contact);
-    // }
   }
 
-  private moveToEnd(contact: IContact) {
-    this.contacts = [...this.contacts.filter((c) => c !== contact), contact];
+  private moveToEnd(nodeId: number) {
+    this.nodes = [...this.nodes.filter((n) => n !== nodeId), nodeId];
   }
 }

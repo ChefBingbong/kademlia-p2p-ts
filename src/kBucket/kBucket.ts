@@ -33,4 +33,12 @@ export class KBucket {
   public moveToEnd(nodeId: number) {
     this.nodes = [...this.nodes.filter((n) => n !== nodeId), nodeId];
   }
+
+  toJSON() {
+    return {
+      id: this.bucketId,
+      nodeId: this.parentNodeId,
+      nodes: this.nodes,
+    };
+  }
 }

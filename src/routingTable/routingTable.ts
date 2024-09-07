@@ -12,6 +12,12 @@ class RoutingTable {
   public findBucket = (nodeId: number) => {
     const bucketIndex = this.getBucketIndex(nodeId);
     const bucket = this.buckets.get(bucketIndex);
+
+    if (!bucket) {
+      const newBucket = new KBucket(bucketIndex, this.tableId);
+      this.buckets.set(bucketIndex, newBucket);
+      return newBucket;
+    }
     return bucket;
   };
 
@@ -26,7 +32,11 @@ class RoutingTable {
   };
 
   public getAllBuckets = () => {
-    this.buckets;
+    let bucketsJson = {};
+    for (const bucket of this.buckets.values()) {
+      bucketsJson[bucket.bucketId] = bucket.toJSON();
+    }
+    return bucketsJson;
   };
 
   public findClosest = () => {
@@ -46,12 +56,12 @@ class RoutingTable {
   public updateTable(nodeId: number) {
     const bucket = this.findBucket(nodeId);
 
-    if (bucket.nodes.includes(nodeId)) {
+    if (bucket?.nodes.includes(nodeId)) {
       bucket.moveToEnd(bucket.bucketId);
       return;
     }
 
-    if (bucket.nodes.length < bucket.bucketSize) {
+    if (bucket?.nodes.length < bucket?.bucketSize) {
       bucket.nodes.push(nodeId);
       return;
     }

@@ -1,8 +1,6 @@
 import * as dgram from "dgram";
 import { Socket } from "dgram";
-import express from "express";
-import { KBucket } from "../kBucket/kBucket";
-import { TType } from "../neighbours/types";
+import RoutingTable from "../routingTable/routingTable";
 // import { Neighbours } from "../contacts/contacts";
 // import { IContact } from "../contacts/types";
 import { BIT_SIZE } from "./constants";
@@ -19,25 +17,75 @@ export function getIdealDistance() {
   return IDEAL_DISTANCE;
 }
 class KademliaNode {
-  //   public nodeId: number;
   public peers: Map<number, number>;
   public address: string;
   public port: number;
   public nodeId: number;
-  private readonly buckets: Map<number, KBucket>;
-
-  private app = express();
+  public table: RoutingTable;
   private socket: Socket;
-  private rpcMap: Map<string, { resolve: Function; type: TType }>;
 
   constructor(id: number, port: number) {
     this.nodeId = id;
     this.port = port;
     this.address = "127.0.0.1";
-    this.table = new Map();
-    this.buckets = new Map();
+    this.table = new RoutingTable(this.nodeId);
     this.socket = dgram.createSocket("udp4");
     this.socket.on("message", this.handleRPC);
+  }
+
+  public async start() {
+    try {
+      this.socket.bind(this.port, async () => {
+        this.table.updateTable(this.nodeId);
+        this.send(3000, "PING", { nodeId: this.nodeId, port: this.port });
+      });
+    } catch (err) {
+      console.log(err);
+    }
+  }
+
+  private send = (contact: number, type: any, data: any) => {
+    const message = JSON.stringify({
+      type,
+      data: data,
+      fromNodeId: this.nodeId,
+      fromPort: this.port,
+    });
+
+    this.socket.send(message, contact, this.address);
+  };
+
+  private handleRPC = async (msg: Buffer, info: dgram.RemoteInfo) => {
+    try {
+      const message = JSON.parse(msg.toString());
+      const externalContact = message.fromNodeId;
+      this.table.updateTable(externalContact);
+
+      // console.log(message, info);
+      switch (message.type) {
+        case "REPLY": {
+          console.log(message);
+          const externalBuckets = Object.values(message.data.buckets);
+          externalBuckets.forEach((b: any) => this.table.updateTable(b.nodeId));
+          break;
+        }
+        case "PING": {
+          this.send(message.fromPort, "REPLY", { buckets: this.table.getAllBuckets() });
+          break;
+        }
+        default:
+          // TODO: log, throw exception
+          return;
+      }
+    } catch (error) {
+      console.error(error);
+    }
+    console.log(this.table.getAllBuckets());
+  };
+
+  public close() {
+    this.socket.removeAllListeners("message");
+    this.socket.close();
   }
 }
 

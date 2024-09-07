@@ -30,7 +30,7 @@ export class KBucket {
     }
   }
 
-  private moveToEnd(nodeId: number) {
+  public moveToEnd(nodeId: number) {
     this.nodes = [...this.nodes.filter((n) => n !== nodeId), nodeId];
   }
 }

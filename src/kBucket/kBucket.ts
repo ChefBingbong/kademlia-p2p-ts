@@ -28,6 +28,10 @@ export class KBucket {
       this.nodes.push(nodeId);
       return;
     }
+
+    //     try {
+    //       this.node.send(3000 + nodeId, "PING", { buckets: this.node.table.getAllBuckets() });
+    //     } catch (e) {}
   }
 
   public moveToEnd(nodeId: number) {

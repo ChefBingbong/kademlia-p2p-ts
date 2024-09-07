@@ -1,4 +1,5 @@
 import { Router } from "express";
+import KademliaNode from "../../node/node";
 import BaseController from "../controller/base.controller";
 import type { Routes } from "../interfaces/routes.interface";
 
@@ -7,19 +8,14 @@ class BaseRoute implements Routes {
   public baseController: BaseController;
   public readonly path = "/";
 
-  constructor() {
-    this.baseController = new BaseController();
+  constructor(node: KademliaNode) {
+    this.baseController = new BaseController(node);
     this.initializeRoutes();
   }
 
   private initializeRoutes(): void {
-    this.router.get(`${this.path}/ping`, this.baseController.ping);
-    this.router.get(`${this.path}/pingServer/:port`, this.baseController.pingServer);
-    this.router.get(`${this.path}/get/:key`, this.baseController.get);
-    this.router.get(`${this.path}/getAllKeys`, this.baseController.getAllKeys);
-    this.router.get(`${this.path}/findNode/:nodeId`, this.baseController.findNode);
-    this.router.get(`${this.path}/findValue/:key`, this.baseController.findValue);
-    this.router.get(`${this.path}/store/:key/:value`, this.baseController.store);
+    this.router.get(`${this.path}getBucketNodes/:port`, this.baseController.getNodeBuckets);
+    this.router.post(`${this.path}ping/:port`, this.baseController.ping);
   }
 }
 

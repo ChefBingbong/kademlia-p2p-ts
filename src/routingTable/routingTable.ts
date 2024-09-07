@@ -1,12 +1,15 @@
 import { KBucket } from "../kBucket/kBucket";
+import KademliaNode from "../node/node";
 
 class RoutingTable {
   public tableId: number;
   buckets: Map<number, KBucket>;
+  public node: KademliaNode;
 
-  constructor(tableId: number) {
+  constructor(tableId: number, node: KademliaNode) {
     this.tableId = tableId;
     this.buckets = new Map();
+    this.node = node;
   }
 
   public findBucket = (nodeId: number) => {
@@ -65,6 +68,11 @@ class RoutingTable {
       bucket.nodes.push(nodeId);
       return;
     }
+
+    //     try {
+    //       const contact = Object.values(this.getAllBuckets())[0] as any;
+    //       this.node.send(3000 + contact?.nodeId, "REPLY", { buckets: this.getAllBuckets(), break: true });
+    //     } catch (e) {}
   }
 
   private getBucketIndex = (targetId: number): number => {

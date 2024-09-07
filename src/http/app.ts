@@ -5,6 +5,7 @@ import helmet from "helmet";
 import hpp from "hpp";
 import type { Logger } from "winston";
 import config from "../config/config";
+import KademliaNode from "../node/node";
 import { AppLogger } from "../utils/logger";
 import errorHandlingMiddleware from "./midleware/errorHandler.middleware";
 import BaseRoute from "./routes/base.route";
@@ -15,12 +16,14 @@ export class App extends AppLogger {
   public app: express.Application;
   public port: string | number;
   static log: Logger;
+  public node: KademliaNode;
 
-  constructor(port: number) {
+  constructor(node: KademliaNode, port: number) {
     super();
     this.app = express();
     this.port = port;
 
+    this.node = node;
     this.configureMiddlewares();
     this.configureRoutes();
     this.configureErrorHandling();
@@ -34,7 +37,7 @@ export class App extends AppLogger {
     this.app.use(helmet());
     this.app.use(compression());
     this.app.use(express.json());
-    this.app.use(express.urlencoded({ extended: true }));
+    // this.app.use(express.urlencoded({ extended: true }));
   }
 
   private configureRoutes(): void {
@@ -42,7 +45,7 @@ export class App extends AppLogger {
       res.status(200).send({ result: "ok" });
     });
 
-    const route = new BaseRoute();
+    const route = new BaseRoute(this.node);
     this.app.use("/", route.router);
   }
 

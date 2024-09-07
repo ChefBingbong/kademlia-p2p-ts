@@ -1,5 +1,6 @@
 import * as dgram from "dgram";
 import { Socket } from "dgram";
+import { App } from "../http/app";
 import RoutingTable from "../routingTable/routingTable";
 // import { Neighbours } from "../contacts/contacts";
 // import { IContact } from "../contacts/types";
@@ -23,14 +24,17 @@ class KademliaNode {
   public nodeId: number;
   public table: RoutingTable;
   private socket: Socket;
+  public api: App;
 
   constructor(id: number, port: number) {
     this.nodeId = id;
     this.port = port;
     this.address = "127.0.0.1";
-    this.table = new RoutingTable(this.nodeId);
+    this.table = new RoutingTable(this.nodeId, this);
     this.socket = dgram.createSocket("udp4");
     this.socket.on("message", this.handleRPC);
+    this.api = new App(this, this.port);
+    this.api.listen();
   }
 
   public async start() {
@@ -44,7 +48,7 @@ class KademliaNode {
     }
   }
 
-  private send = (contact: number, type: any, data: any) => {
+  public send = (contact: number, type: any, data: any) => {
     const message = JSON.stringify({
       type,
       data: data,
@@ -66,11 +70,23 @@ class KademliaNode {
         case "REPLY": {
           console.log(message);
           const externalBuckets = Object.values(message.data.buckets);
-          externalBuckets.forEach((b: any) => this.table.updateTable(b.nodeId));
+          let externalNodes = [];
+
+          externalBuckets.forEach((b: { id: number; nodeId: number; nodes: number[] }) => {
+            this.table.updateTable(b.nodeId);
+            b.nodes.forEach((n) => {
+              if (n !== 0 && n !== this.nodeId) externalNodes.push(n);
+            });
+          });
+
+          if (message.data?.break === true) break;
+          externalNodes.forEach((n) => {
+            this.send(n + 3000, "REPLY", { buckets: this.table.getAllBuckets(), break: true });
+          });
           break;
         }
         case "PING": {
-          this.send(message.fromPort, "REPLY", { buckets: this.table.getAllBuckets() });
+          this.send(info.port, "REPLY", { buckets: this.table.getAllBuckets() });
           break;
         }
         default:

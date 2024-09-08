@@ -63,7 +63,7 @@ class RoutingTable {
     }
   }
 
-  public findNode(key: number, count: number = 4) {
+  public findNode(key: number, count: number = BIT_SIZE) {
     const closestNodes: CloseNodes[] = [];
 
     const bucketIndex = this.getBucketIndex(key);
@@ -114,7 +114,7 @@ class RoutingTable {
   public getBucketIndex = (targetId: number): number => {
     const xorResult = this.tableId ^ targetId;
 
-    for (let i = 3; i >= 0; i--) {
+    for (let i = BIT_SIZE - 1; i >= 0; i--) {
       if (xorResult & (1 << i)) return i;
     }
     return 0;

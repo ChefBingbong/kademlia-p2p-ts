@@ -5,6 +5,7 @@ import { Server, WebSocket } from "ws";
 import { App } from "../http/app";
 import RoutingTable from "../routingTable/routingTable";
 import { ErrorWithCode, ProtocolError } from "../utils/errors";
+import { BIT_SIZE } from "./constants";
 // import { Neighbours } from "../contacts/contacts";
 // import { IContact } from "../contacts/types";
 import { Listener, P2PNetworkEventEmitter } from "./eventEmitter";
@@ -183,14 +184,14 @@ class KademliaNode {
   private handlePeerConnection = (callback?: () => Promise<void>) => {
     this.on("connect", async ({ nodeId }: { nodeId: string }) => {
       console.log(`New node connected: ${nodeId}`);
-      await callback();
+      // await callback();
     });
   };
 
   private handlePeerDisconnect = (callback?: () => Promise<void>) => {
     this.on("disconnect", async ({ nodeId }: { nodeId: string }) => {
       console.log(`Node disconnected: ${nodeId}`);
-      await callback();
+      // await callback();
     });
   };
   public send = (contact: number, type: any, data: any) => {
@@ -222,7 +223,7 @@ class KademliaNode {
     this.closestNodes.push(hasCloserThanExist);
   };
   private async findNodes(key: number) {
-    this.shortlist = this.table.findNode(key, 4);
+    this.shortlist = this.table.findNode(key, BIT_SIZE);
     this.currentClosestNode = this.shortlist[0];
 
     this.contactNearestNodes();
@@ -240,7 +241,7 @@ class KademliaNode {
     if (!this.closestNodes.length) return;
 
     const isUpdatedClosest = this.closestNodes.some(Boolean);
-    if (isUpdatedClosest && this.contacted.size < 4) {
+    if (isUpdatedClosest && this.contacted.size < BIT_SIZE) {
       this.contactNearestNodes();
     }
   };

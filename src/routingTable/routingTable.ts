@@ -63,7 +63,7 @@ class RoutingTable {
     }
   }
 
-  public findNode(key: number, count: number = 6) {
+  public findNode(key: number, count: number = 4) {
     const closestNodes: CloseNodes[] = [];
 
     const bucketIndex = this.getBucketIndex(key);

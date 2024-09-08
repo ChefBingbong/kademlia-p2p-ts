@@ -49,20 +49,6 @@ class RoutingTable {
     return bucketsJson;
   };
 
-  public findClosest = () => {
-    for (const bucket of this.buckets.values()) {
-      let closestNodes = [];
-
-      if (bucket.nodes.length >= 8) {
-        closestNodes = bucket.nodes.slice(0, 8);
-      }
-      if (bucket.nodes.length > 0) {
-        closestNodes = Array.of(8).map(() => bucket.nodes[0]);
-        return closestNodes;
-      }
-    }
-  };
-
   public updateTable(nodeId: number) {
     const bucket = this.findBucket(nodeId);
 
@@ -109,9 +95,7 @@ class RoutingTable {
       }
     }
 
-    //     console.log(closestNodes);
     const r = closestNodes.map((c) => c.node);
-    //     console.log(closestNodes.map((c) => c.node));
     return r.sort((a, b) => b - a);
   }
 

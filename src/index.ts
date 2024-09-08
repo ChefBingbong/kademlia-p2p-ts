@@ -45,8 +45,8 @@ async function main() {
     nodes.push(node);
   }
 
-  await delay(2000);
-  nodes.forEach((n) => n.init());
+  //   await delay(2000);
+  //   nodes.forEach((n) => n.init());
 }
 
 main().catch((error) => {

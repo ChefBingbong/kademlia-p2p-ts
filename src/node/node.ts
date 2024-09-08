@@ -18,7 +18,6 @@ export function getIdealDistance() {
   return IDEAL_DISTANCE;
 }
 class KademliaNode {
-  public peers: Map<number, number>;
   public address: string;
   public port: number;
   public nodeId: number;
@@ -27,19 +26,21 @@ class KademliaNode {
   public api: App;
   private stopDiscovery = false;
   public contacted = new Map<string, number>();
-  public failed = new Set<string>();
+
   public shortlist: number[] = [];
   public currentClosestNode: number;
-  public promises: boolean[] = [];
+  public closestNodes: boolean[] = [];
 
   constructor(id: number, port: number) {
     this.nodeId = id;
     this.port = port;
     this.address = "127.0.0.1";
+
     this.table = new RoutingTable(this.nodeId, this);
     this.socket = dgram.createSocket("udp4");
-    this.socket.on("message", this.handleRPC);
     this.api = new App(this, this.port);
+
+    this.socket.on("message", this.handleMessage);
     this.api.listen();
   }
 
@@ -50,40 +51,11 @@ class KademliaNode {
         this.startNodeDiscovery();
       });
 
-      setTimeout(() => this.stopNodeDiscovery(), 20000);
+      setTimeout(() => this.stopNodeDiscovery(), 16000);
     } catch (err) {
       console.log(err);
     }
   }
-
-  // Async loop that repeatedly calls findNode
-  private async discoverNodes(): Promise<void> {
-    while (!this.stopDiscovery) {
-      await this.init();
-      await this.sleep(); // Wait for the interval before next discovery
-    }
-  }
-
-  // Async sleep function
-  private sleep(): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, 4000));
-  }
-  // Start the discovery process
-  startNodeDiscovery(): void {
-    this.stopDiscovery = false;
-    this.discoverNodes(); // Start async loop
-  }
-
-  // Stop the discovery process
-  stopNodeDiscovery(): void {
-    this.stopDiscovery = true;
-    console.log("Stopping node discovery");
-  }
-
-  public init = async () => {
-    const nodes = await this.findNodes(this.nodeId);
-    nodes.forEach((n) => this.table.updateTable(n));
-  };
 
   public send = (contact: number, type: any, data: any) => {
     const message = JSON.stringify({
@@ -96,69 +68,10 @@ class KademliaNode {
     this.socket.send(message, contact, this.address);
   };
 
-  private handleRPC = async (msg: Buffer, info: dgram.RemoteInfo) => {
-    try {
-      const message = JSON.parse(msg.toString());
-      const externalContact = message.fromNodeId;
-      this.table.updateTable(externalContact);
-
-      // console.log(message, info);
-      switch (message.type) {
-        case "REPLY": {
-          //     console.log(message);
-          //     const externalBuckets = Object.values(message.data.buckets);
-          //     let externalNodes = [];
-
-          //     externalBuckets.forEach((b: { id: number; nodeId: number; nodes: number[] }) => {
-          //       this.table.updateTable(b.nodeId);
-          //       b.nodes.forEach((n) => {
-          //         if (n !== 0 && n !== this.nodeId) externalNodes.push(n);
-          //       });
-          //     });
-
-          //     if (message.data?.break === true) break;
-          //     externalNodes.forEach((n) => {
-          //       this.send(n + 3000, "REPLY", { buckets: this.table.getAllBuckets(), break: true });
-          //     });
-          break;
-        }
-        case "PING": {
-          this.send(info.port, "REPLY", { buckets: this.table.getAllBuckets() });
-          break;
-        }
-        case "FIND_NODE": {
-          const closestNodes = this.table.findNode(externalContact);
-          console.log(externalContact, closestNodes);
-          this.send(info.port, "REPLY_FIND_NODE", {
-            buckets: this.table.getAllBuckets(),
-            closestNodes,
-            externalContact,
-          });
-          break;
-        }
-        case "REPLY_FIND_NODE": {
-          message.data.closestNodes.forEach((b) => {
-            this.table.updateTable(b);
-          });
-          this.handnleFindNodeRequest(message.data.closestNodes, externalContact);
-          break;
-        }
-        default:
-          // TODO: log, throw exception
-          return;
-      }
-    } catch (error) {
-      console.error(error);
-    }
-    //     console.log(this.table.getAllBuckets());
-    //     console.log("heyyyyyyyy");
-  };
-
   public handnleFindNodeRequest = (nodeResponse: number[], contact: number) => {
     let hasCloserThanExist = false;
 
     this.contacted.set(contact.toString(), contact);
-
     for (const closerNode of nodeResponse) {
       this.shortlist.push(closerNode);
 
@@ -170,48 +83,95 @@ class KademliaNode {
         hasCloserThanExist = true;
       }
     }
-    this.promises.push(hasCloserThanExist);
+    this.closestNodes.push(hasCloserThanExist);
   };
   private async findNodes(key: number) {
     this.shortlist = this.table.findNode(key, 4);
-    //     console.log(this.table.findNode(key, 4));
     this.currentClosestNode = this.shortlist[0];
 
-    let iteration: number;
-    const communicate = async () => {
-      this.promises = [];
-
-      iteration = iteration == null ? 0 : iteration + 1;
-      const alphaContacts = this.shortlist.slice(iteration * 3, iteration * 3 + 3);
-      // console.log(alphaContacts);
-      for (const contact of this.shortlist) {
-        if (this.contacted.has(contact.toString())) {
-          continue;
-        }
-        this.send(3000 + contact, "FIND_NODE", { nodeId: this.nodeId, port: this.port });
-      }
-
-      // console.log(this.promises.length);
-      if (!this.promises.length) {
-        console.log("No more contacts in shortlist");
-        return;
-      }
-
-      const isUpdatedClosest = this.promises.some(Boolean);
-
-      if (isUpdatedClosest && this.contacted.size < 4) {
-        await communicate();
-      }
-    };
-
-    await communicate();
-
+    this.contactNearestNodes();
     return Array.from(this.contacted.values());
   }
+
+  private contactNearestNodes = () => {
+    this.closestNodes = [];
+    for (const contact of this.shortlist) {
+      if (this.contacted.has(contact.toString())) {
+        continue;
+      }
+      this.send(3000 + contact, "FIND_NODE", {});
+    }
+    if (!this.closestNodes.length) return;
+
+    const isUpdatedClosest = this.closestNodes.some(Boolean);
+    if (isUpdatedClosest && this.contacted.size < 4) {
+      this.contactNearestNodes();
+    }
+  };
+
+  private handleMessage = async (msg: Buffer, info: dgram.RemoteInfo) => {
+    try {
+      const message = JSON.parse(msg.toString());
+      const externalContact = message.fromNodeId;
+      this.table.updateTable(externalContact);
+
+      switch (message.type) {
+        case "REPLY": {
+          console.log(message);
+          break;
+        }
+        case "PING": {
+          this.send(info.port, "REPLY", { buckets: this.table.getAllBuckets() });
+          break;
+        }
+        case "FIND_NODE": {
+          const closestNodes = this.table.findNode(externalContact);
+          this.send(info.port, "REPLY_FIND_NODE", {
+            buckets: this.table.getAllBuckets(),
+            closestNodes,
+          });
+          break;
+        }
+        case "REPLY_FIND_NODE": {
+          message.data.closestNodes.forEach((b) => {
+            this.table.updateTable(b);
+          });
+          this.handnleFindNodeRequest(message.data.closestNodes, externalContact);
+          break;
+        }
+        default:
+          return;
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   public close() {
     this.socket.removeAllListeners("message");
     this.socket.close();
+  }
+
+  private async discoverNodes(): Promise<void> {
+    while (!this.stopDiscovery) {
+      const closeNodes = await this.findNodes(this.nodeId);
+      closeNodes.forEach((n) => this.table.updateTable(n));
+      await this.sleep(4000);
+    }
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  startNodeDiscovery(): void {
+    this.stopDiscovery = false;
+    this.discoverNodes();
+  }
+
+  stopNodeDiscovery(): void {
+    this.stopDiscovery = true;
+    console.log("Stopping node discovery");
   }
 }
 

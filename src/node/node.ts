@@ -1,5 +1,6 @@
 import * as dgram from "dgram";
 import { Socket } from "dgram";
+import { v4 } from "uuid";
 import { Server, WebSocket } from "ws";
 import { App } from "../http/app";
 import RoutingTable from "../routingTable/routingTable";
@@ -95,8 +96,32 @@ class KademliaNode {
       // this.emitter.emitDisconnect(nodeId, true);
     });
 
+    this.emitter.on("_message", async ({ connectionId, message }) => {
+      const { type, data } = message;
+
+      if (type === "message") {
+        this.emitter.emitMessage(connectionId, data, true);
+      }
+    });
+
     this.emitter.on("message", ({ nodeId, data: packet }) => {
-      console.log("recieved messageee");
+      if (this.seenMessages.has(packet.id) || packet.ttl < 1) return;
+
+      if (packet.type === "broadcast") {
+        if (packet.origin !== this.port) {
+          this.emitter.emitBroadcast(packet.message, packet.origin);
+        } else {
+          this.broadcast(packet.message, packet.id, packet.origin, packet.ttl - 1);
+        }
+      }
+
+      if (packet.type === "direct") {
+        if (packet.destination === this.port) {
+          this.emitter.emitDirect(packet.message, packet.origin);
+        } else {
+          this.sendDirect(packet.destination, packet.message, packet.id, packet.origin, packet.ttl - 1);
+        }
+      }
     });
 
     this.isInitialized = true;
@@ -112,8 +137,10 @@ class KademliaNode {
     });
 
     this.handlePeerConnection(async (p: number) => {});
-
     this.handlePeerDisconnect(async (p: number) => {});
+
+    this.handleBroadcastMessage(async () => {});
+    this.handleDirectMessage(async () => {});
 
     this.connect(this.port + 1000, () => {
       console.log(`Connection to ${this.port + 1000} established.`);
@@ -287,7 +314,7 @@ class KademliaNode {
     }
   }
 
-  public broadcast = (message: any, id: string = v4(), origin: string = this.validator.ID, ttl: number = 255) => {
+  public broadcast = (message: any, id: string = v4(), origin: string = this.port.toString(), ttl: number = 255) => {
     this.sendPacket({ id, ttl, type: "broadcast", message, origin });
   };
 
@@ -295,7 +322,7 @@ class KademliaNode {
     destination: string,
     message: any,
     id: string = v4(),
-    origin: string = this.validator.ID,
+    origin: string = this.port.toString(),
     ttl: number = 255,
   ) => {
     this.sendPacket({
@@ -334,6 +361,23 @@ class KademliaNode {
         ProtocolError.INTERNAL_ERROR,
       );
     socket.send(JSON.stringify(message));
+  };
+
+  private handleBroadcastMessage = (callback?: () => Promise<void>) => {
+    this.on("broadcast", async ({ message }: { message: any }) => {
+      await callback();
+    });
+  };
+
+  private handleDirectMessage = (callback?: () => Promise<void>) => {
+    this.on("direct", async ({ message }: { message: any }) => {
+      try {
+        await callback();
+      } catch (error) {
+        console.log(error);
+        throw new ErrorWithCode(`Error prcessing direct message for ${this.nodeId}`, ProtocolError.INTERNAL_ERROR);
+      }
+    });
   };
 
   private sleep(ms: number): Promise<void> {

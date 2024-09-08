@@ -26,6 +26,12 @@ class KademliaNode {
   private socket: Socket;
   public api: App;
 
+  public contacted = new Map<string, number>();
+  public failed = new Set<string>();
+  public shortlist: number[] = [];
+  public currentClosestNode: number;
+  public promises: boolean[] = [];
+
   constructor(id: number, port: number) {
     this.nodeId = id;
     this.port = port;
@@ -41,12 +47,23 @@ class KademliaNode {
     try {
       this.socket.bind(this.port, async () => {
         this.table.updateTable(this.nodeId);
-        this.send(3000, "PING", { nodeId: this.nodeId, port: this.port });
+        this.table.updateTable(0);
+        const res = await this.init();
+        //   const res = await this.init();
+
+        res.forEach((r) => this.table.updateTable(r));
+        //   console.log(this.table.findNode(this.nodeId), "heyyyyyyyy");
+        //   this.send(3000, "FIND_NODE", { nodeId: this.nodeId, port: this.port });
       });
     } catch (err) {
       console.log(err);
     }
   }
+
+  public init = async () => {
+    const n = await this.findNodes(this.nodeId);
+    return n;
+  };
 
   public send = (contact: number, type: any, data: any) => {
     const message = JSON.stringify({
@@ -68,7 +85,7 @@ class KademliaNode {
       // console.log(message, info);
       switch (message.type) {
         case "REPLY": {
-          console.log(message);
+          //     console.log(message);
           const externalBuckets = Object.values(message.data.buckets);
           let externalNodes = [];
 
@@ -89,6 +106,23 @@ class KademliaNode {
           this.send(info.port, "REPLY", { buckets: this.table.getAllBuckets() });
           break;
         }
+        case "FIND_NODE": {
+          const closestNodes = this.table.findNode(externalContact);
+          //     console.log(closestNodes, "hey");
+          this.send(info.port, "REPLY_FIND_NODE", {
+            buckets: this.table.getAllBuckets(),
+            closestNodes,
+            externalContact,
+          });
+          break;
+        }
+        case "REPLY_FIND_NODE": {
+          message.data.closestNodes.forEach((b) => {
+            this.table.updateTable(b);
+          });
+          this.handnleFindNodeRequest(message.data.closestNodes, message.data.externalContact);
+          break;
+        }
         default:
           // TODO: log, throw exception
           return;
@@ -96,8 +130,63 @@ class KademliaNode {
     } catch (error) {
       console.error(error);
     }
-    console.log(this.table.getAllBuckets());
+    //     console.log(this.table.getAllBuckets());
+    //     console.log("heyyyyyyyy");
   };
+
+  public handnleFindNodeRequest = (nodeResponse: number[], contact: number) => {
+    let hasCloserThanExist = false;
+
+    this.contacted.set(contact.toString(), contact);
+
+    for (const closerNode of nodeResponse) {
+      this.shortlist.push(closerNode);
+
+      const currentDistance = this.table.getBucketIndex(this.currentClosestNode);
+      const distance = this.table.getBucketIndex(closerNode);
+
+      if (distance < currentDistance) {
+        this.currentClosestNode = closerNode;
+        hasCloserThanExist = true;
+      }
+    }
+    this.promises.push(hasCloserThanExist);
+  };
+  private async findNodes(key: number) {
+    this.shortlist = this.table.findNode(key, 4);
+    this.currentClosestNode = this.shortlist[0];
+
+    let iteration: number;
+    const communicate = async () => {
+      this.promises = [];
+
+      iteration = iteration == null ? 0 : iteration + 1;
+      const alphaContacts = this.shortlist.slice(iteration * 3, iteration * 3 + 3);
+      // console.log(alphaContacts);
+      for (const contact of alphaContacts) {
+        if (this.contacted.has(contact.toString())) {
+          continue;
+        }
+        this.send(3000 + contact, "FIND_NODE", { nodeId: this.nodeId, port: this.port });
+      }
+
+      // console.log(this.promises.length);
+      if (!this.promises.length) {
+        console.log("No more contacts in shortlist");
+        return;
+      }
+
+      const isUpdatedClosest = this.promises.some(Boolean);
+
+      if (isUpdatedClosest && this.contacted.size < 4) {
+        await communicate();
+      }
+    };
+
+    await communicate();
+
+    return Array.from(this.contacted.values());
+  }
 
   public close() {
     this.socket.removeAllListeners("message");

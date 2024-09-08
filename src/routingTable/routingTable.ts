@@ -1,5 +1,12 @@
 import { KBucket } from "../kBucket/kBucket";
+import { BIT_SIZE, HASH_SIZE } from "../node/constants";
 import KademliaNode from "../node/node";
+import { XOR } from "../node/utils";
+
+type CloseNodes = {
+  distance: number;
+  node: number;
+};
 
 class RoutingTable {
   public tableId: number;
@@ -68,14 +75,58 @@ class RoutingTable {
       bucket.nodes.push(nodeId);
       return;
     }
-
-    //     try {
-    //       const contact = Object.values(this.getAllBuckets())[0] as any;
-    //       this.node.send(3000 + contact?.nodeId, "REPLY", { buckets: this.getAllBuckets(), break: true });
-    //     } catch (e) {}
   }
 
-  private getBucketIndex = (targetId: number): number => {
+  public findNode(key: number, count: number = 4) {
+    const closestNodes: CloseNodes[] = [];
+
+    const bucketIndex = this.getBucketIndex(key);
+    this.addNodes(key, bucketIndex, closestNodes);
+
+    let aboveIndex = bucketIndex + 1;
+    let belowIndex = bucketIndex - 1;
+    while (true) {
+      if (closestNodes.length === count || (!(belowIndex > 0) && !(aboveIndex !== HASH_SIZE))) {
+        break;
+      }
+
+      while (aboveIndex !== HASH_SIZE) {
+        if (this.buckets.has(aboveIndex)) {
+          this.addNodes(key, aboveIndex, closestNodes);
+          aboveIndex++;
+          break;
+        }
+        aboveIndex++;
+      }
+
+      while (belowIndex > 0) {
+        if (this.buckets.has(belowIndex)) {
+          this.addNodes(key, belowIndex, closestNodes);
+          belowIndex--;
+          break;
+        }
+        belowIndex--;
+      }
+    }
+
+    console.log(closestNodes);
+    closestNodes.sort();
+    return closestNodes.map((c) => c.node);
+  }
+
+  private addNodes = (key: number, bucketIndex: number, nodes: CloseNodes[]) => {
+    const bucket = this.buckets.get(bucketIndex);
+    if (!bucket) return;
+
+    for (const node of bucket.getNodes()) {
+      if (node === key) continue;
+      if (nodes.length === BIT_SIZE) break;
+
+      nodes.push({ distance: XOR(node, key), node });
+    }
+  };
+
+  public getBucketIndex = (targetId: number): number => {
     const xorResult = this.tableId ^ targetId;
 
     for (let i = 3; i >= 0; i--) {

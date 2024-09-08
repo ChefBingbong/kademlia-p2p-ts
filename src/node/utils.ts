@@ -11,7 +11,7 @@ export const HASH_BIT_SIZE = (key: number) => {
 };
 
 export const XOR = (n1: number, n2: number) => {
-  return Mathjs.bitXor(Mathjs.bignumber(n1), Mathjs.bignumber(n2));
+  return Mathjs.bitXor(Mathjs.bignumber(n1), Mathjs.bignumber(n2)).toNumber();
 };
 
 export function getIdealDistance() {

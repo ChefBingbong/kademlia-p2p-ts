@@ -42,6 +42,15 @@ class BaseController {
       next(error);
     }
   };
+
+  public getNodeMessages = (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const messages = Array.from(this.node.messages.values());
+      return res.json({ result: messages });
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
 export default BaseController;

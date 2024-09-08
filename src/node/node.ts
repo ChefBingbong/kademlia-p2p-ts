@@ -30,7 +30,8 @@ class KademliaNode {
   public api: App;
   private stopDiscovery = false;
   public contacted = new Map<string, number>();
-  private seenMessages: Set<string> = new Set();
+  public seenMessages: Set<string> = new Set();
+  public messages = new Map<string, string>();
 
   public readonly connections: Map<string, WebSocket>;
   //   public readonly neighbors: Map<string, string>;
@@ -105,13 +106,15 @@ class KademliaNode {
     });
 
     this.emitter.on("message", ({ nodeId, data: packet }) => {
+      console.log(this.seenMessages.has(packet.id));
       if (this.seenMessages.has(packet.id) || packet.ttl < 1) return;
 
+      this.messages.set(packet.id, JSON.stringify({ id: packet.id, msg: packet.message.message }));
       if (packet.type === "broadcast") {
-        if (packet.origin !== this.port) {
+        if (packet.origin === this.port.toString()) {
           this.emitter.emitBroadcast(packet.message, packet.origin);
         } else {
-          this.broadcast(packet.message, packet.id, packet.origin, packet.ttl - 1);
+          this.broadcast(packet.message, packet.id, packet.origin);
         }
       }
 
@@ -154,7 +157,7 @@ class KademliaNode {
     if (emitConnect) this.emitter.emitConnect(this.nodeId.toString(), false);
 
     socket.on("message", (message: any) => {
-      console.log(message);
+      // console.log(message);
       const receivedData = JSON.parse(message);
       this.emitter.emitMessage(connectionId, receivedData, false);
     });
@@ -304,12 +307,14 @@ class KademliaNode {
             console.log(`Connection to ${n + 4000} established.`);
           });
         } else {
-          const socket = this.connections.get(n.toString());
-
-          if (socket) socket.send(JSON.stringify({ message: "heyyy" }));
+          //     const socket = this.connections.get(n.toString());
+          //     if (socket) socket.send(JSON.stringify({ message: "heyyy" }));
         }
       });
-
+      // this.broadcast({
+      //   message: `${this.nodeId} is starting a new sign session`,
+      //   type: "MESSAGE_TYPE.signSessionInit",
+      // });
       await this.sleep(5000);
     }
   }
@@ -340,16 +345,16 @@ class KademliaNode {
       this.sendTCP(packet.destination, packet);
       this.seenMessages.add(packet.id);
     } else {
-      for (const $nodeId of this.neighbors.keys()) {
+      for (const $nodeId of this.connections.keys()) {
         this.sendTCP($nodeId, packet);
-        // this.seenMessages.add(packet.id);
+        this.seenMessages.add(packet.id);
       }
     }
   };
 
   private sendTCP = (nodeId: string, data: any) => {
-    const connectionId = this.neighbors.get(nodeId);
-    this._send(connectionId, { type: "message", data });
+    //     const connectionId = this.neighbors.get(nodeId);
+    this._send(nodeId, { type: "message", data });
   };
 
   private _send = (connectionId: string, message: any) => {
@@ -365,6 +370,9 @@ class KademliaNode {
 
   private handleBroadcastMessage = (callback?: () => Promise<void>) => {
     this.on("broadcast", async ({ message }: { message: any }) => {
+      // this.seenMessages.set(packet.id);
+      console.log(this.port);
+
       await callback();
     });
   };

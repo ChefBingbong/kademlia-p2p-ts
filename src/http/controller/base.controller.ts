@@ -9,7 +9,7 @@ class BaseController {
   }
   public ping = async (req: Request, res: Response, next: NextResponse) => {
     const payload = req.body;
-    this.node.send(payload, "PING", { message: "success" });
+    this.node.init();
     return res.json({ message: "success" });
   };
 

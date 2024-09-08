@@ -77,7 +77,7 @@ class RoutingTable {
     }
   }
 
-  public findNode(key: number, count: number = 4) {
+  public findNode(key: number, count: number = 6) {
     const closestNodes: CloseNodes[] = [];
 
     const bucketIndex = this.getBucketIndex(key);
@@ -109,9 +109,10 @@ class RoutingTable {
       }
     }
 
-    console.log(closestNodes);
-    closestNodes.sort();
-    return closestNodes.map((c) => c.node);
+    //     console.log(closestNodes);
+    const r = closestNodes.map((c) => c.node);
+    //     console.log(closestNodes.map((c) => c.node));
+    return r.sort((a, b) => b - a);
   }
 
   private addNodes = (key: number, bucketIndex: number, nodes: CloseNodes[]) => {

@@ -25,7 +25,7 @@ class KademliaNode {
   public table: RoutingTable;
   private socket: Socket;
   public api: App;
-
+  private stopDiscovery = false;
   public contacted = new Map<string, number>();
   public failed = new Set<string>();
   public shortlist: number[] = [];
@@ -45,24 +45,44 @@ class KademliaNode {
 
   public async start() {
     try {
-      this.socket.bind(this.port, async () => {
-        this.table.updateTable(this.nodeId);
+      this.socket.bind(this.port, () => {
         this.table.updateTable(0);
-        const res = await this.init();
-        //   const res = await this.init();
-
-        res.forEach((r) => this.table.updateTable(r));
-        //   console.log(this.table.findNode(this.nodeId), "heyyyyyyyy");
-        //   this.send(3000, "FIND_NODE", { nodeId: this.nodeId, port: this.port });
+        this.startNodeDiscovery();
       });
+
+      setTimeout(() => this.stopNodeDiscovery(), 20000);
     } catch (err) {
       console.log(err);
     }
   }
 
+  // Async loop that repeatedly calls findNode
+  private async discoverNodes(): Promise<void> {
+    while (!this.stopDiscovery) {
+      await this.init();
+      await this.sleep(); // Wait for the interval before next discovery
+    }
+  }
+
+  // Async sleep function
+  private sleep(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, 4000));
+  }
+  // Start the discovery process
+  startNodeDiscovery(): void {
+    this.stopDiscovery = false;
+    this.discoverNodes(); // Start async loop
+  }
+
+  // Stop the discovery process
+  stopNodeDiscovery(): void {
+    this.stopDiscovery = true;
+    console.log("Stopping node discovery");
+  }
+
   public init = async () => {
-    const n = await this.findNodes(this.nodeId);
-    return n;
+    const nodes = await this.findNodes(this.nodeId);
+    nodes.forEach((n) => this.table.updateTable(n));
   };
 
   public send = (contact: number, type: any, data: any) => {
@@ -86,20 +106,20 @@ class KademliaNode {
       switch (message.type) {
         case "REPLY": {
           //     console.log(message);
-          const externalBuckets = Object.values(message.data.buckets);
-          let externalNodes = [];
+          //     const externalBuckets = Object.values(message.data.buckets);
+          //     let externalNodes = [];
 
-          externalBuckets.forEach((b: { id: number; nodeId: number; nodes: number[] }) => {
-            this.table.updateTable(b.nodeId);
-            b.nodes.forEach((n) => {
-              if (n !== 0 && n !== this.nodeId) externalNodes.push(n);
-            });
-          });
+          //     externalBuckets.forEach((b: { id: number; nodeId: number; nodes: number[] }) => {
+          //       this.table.updateTable(b.nodeId);
+          //       b.nodes.forEach((n) => {
+          //         if (n !== 0 && n !== this.nodeId) externalNodes.push(n);
+          //       });
+          //     });
 
-          if (message.data?.break === true) break;
-          externalNodes.forEach((n) => {
-            this.send(n + 3000, "REPLY", { buckets: this.table.getAllBuckets(), break: true });
-          });
+          //     if (message.data?.break === true) break;
+          //     externalNodes.forEach((n) => {
+          //       this.send(n + 3000, "REPLY", { buckets: this.table.getAllBuckets(), break: true });
+          //     });
           break;
         }
         case "PING": {
@@ -108,7 +128,7 @@ class KademliaNode {
         }
         case "FIND_NODE": {
           const closestNodes = this.table.findNode(externalContact);
-          //     console.log(closestNodes, "hey");
+          console.log(externalContact, closestNodes);
           this.send(info.port, "REPLY_FIND_NODE", {
             buckets: this.table.getAllBuckets(),
             closestNodes,
@@ -120,7 +140,7 @@ class KademliaNode {
           message.data.closestNodes.forEach((b) => {
             this.table.updateTable(b);
           });
-          this.handnleFindNodeRequest(message.data.closestNodes, message.data.externalContact);
+          this.handnleFindNodeRequest(message.data.closestNodes, externalContact);
           break;
         }
         default:
@@ -154,6 +174,7 @@ class KademliaNode {
   };
   private async findNodes(key: number) {
     this.shortlist = this.table.findNode(key, 4);
+    //     console.log(this.table.findNode(key, 4));
     this.currentClosestNode = this.shortlist[0];
 
     let iteration: number;
@@ -163,7 +184,7 @@ class KademliaNode {
       iteration = iteration == null ? 0 : iteration + 1;
       const alphaContacts = this.shortlist.slice(iteration * 3, iteration * 3 + 3);
       // console.log(alphaContacts);
-      for (const contact of alphaContacts) {
+      for (const contact of this.shortlist) {
         if (this.contacted.has(contact.toString())) {
           continue;
         }

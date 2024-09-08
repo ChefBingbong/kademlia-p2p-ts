@@ -15,7 +15,7 @@ class BaseRoute implements Routes {
 
   private initializeRoutes(): void {
     this.router.get(`${this.path}getBucketNodes/:port`, this.baseController.getNodeBuckets);
-    this.router.post(`${this.path}ping/:port`, this.baseController.ping);
+    this.router.get(`${this.path}ping`, this.baseController.ping);
   }
 }
 

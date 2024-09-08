@@ -7,20 +7,11 @@ import RoutingTable from "../routingTable/routingTable";
 import { ErrorWithCode, ProtocolError } from "../utils/errors";
 // import { Neighbours } from "../contacts/contacts";
 // import { IContact } from "../contacts/types";
-import { BIT_SIZE } from "./constants";
 import { Listener, P2PNetworkEventEmitter } from "./eventEmitter";
 
 type NodeID = string; // Node ID as a string, typically represented as a hexadecimal string
 type Contact = { nodeId: NodeID; ip: string; port: number };
 
-export function getIdealDistance() {
-  const IDEAL_DISTANCE: number[] = [];
-  for (let i = 0; i < BIT_SIZE; i++) {
-    const val = 2 ** i;
-    IDEAL_DISTANCE.push(val);
-  }
-  return IDEAL_DISTANCE;
-}
 class KademliaNode {
   public address: string;
   public port: number;
@@ -34,9 +25,7 @@ class KademliaNode {
   public messages = new Map<string, string>();
 
   public readonly connections: Map<string, WebSocket>;
-  //   public readonly neighbors: Map<string, string>;
 
-  public readonly neighbors: Map<string, string>;
   public shortlist: number[] = [];
   public currentClosestNode: number;
   public closestNodes: boolean[] = [];
@@ -53,19 +42,19 @@ class KademliaNode {
     this.port = port;
     this.address = "127.0.0.1";
     this.connections = new Map();
-    this.neighbors = new Map();
-    this.table = new RoutingTable(this.nodeId, this);
-    this.socket = dgram.createSocket("udp4");
-    this.api = new App(this, this.port);
 
     this.emitter = new P2PNetworkEventEmitter(false);
     this.emitter.on.bind(this.emitter);
     this.emitter.off.bind(this.emitter);
+
     this.on = (e: string, l: Listener) => this.emitter.on(e, l);
     this.off = (e: string, l: Listener) => this.emitter.on(e, l);
 
+    this.api = new App(this, this.port);
+    this.table = new RoutingTable(this.nodeId, this);
     this.server = new WebSocket.Server({ port: this.port + 1000 });
 
+    this.socket = dgram.createSocket("udp4");
     this.socket.on("message", this.handleMessage);
     this.api.listen();
 
@@ -78,8 +67,6 @@ class KademliaNode {
         this.table.updateTable(0);
         this.startNodeDiscovery();
       });
-
-      // setTimeout(() => this.stopNodeDiscovery(), 20000);
     } catch (err) {
       console.log(err);
     }
@@ -88,17 +75,22 @@ class KademliaNode {
   // server init
   private initState(): void {
     this.emitter.on("_connect", (connectionId) => {
-      console.log("connectingggg", connectionId);
-      // this.neighbors.set(connectionId, connectionId);
+      this._send(connectionId.connectionId, {
+        type: "handshake",
+        data: { nodeId: connectionId },
+      });
     });
 
     this.emitter.on("_disconnect", (connectionId) => {
-      console.log("disconnecting");
-      // this.emitter.emitDisconnect(nodeId, true);
+      this.emitter.emitDisconnect(connectionId, true);
     });
 
     this.emitter.on("_message", async ({ connectionId, message }) => {
       const { type, data } = message;
+      if (type === "handshake") {
+        const { nodeId } = data;
+        this.emitter.emitConnect(nodeId, true);
+      }
 
       if (type === "message") {
         this.emitter.emitMessage(connectionId, data, true);
@@ -106,10 +98,10 @@ class KademliaNode {
     });
 
     this.emitter.on("message", ({ nodeId, data: packet }) => {
-      console.log(this.seenMessages.has(packet.id));
       if (this.seenMessages.has(packet.id) || packet.ttl < 1) return;
 
-      this.messages.set(packet.id, JSON.stringify({ id: packet.id, msg: packet.message.message }));
+      const message = JSON.stringify({ id: packet.id, msg: packet.message.message });
+      this.messages.set(packet.id, message);
       if (packet.type === "broadcast") {
         if (packet.origin === this.port.toString()) {
           this.emitter.emitBroadcast(packet.message, packet.origin);
@@ -131,7 +123,7 @@ class KademliaNode {
     this.listen();
   }
 
-  public listen(cb?: () => void): (cb?: any) => void {
+  public listen(): (cb?: any) => void {
     if (!this.isInitialized)
       throw new ErrorWithCode(`Cannot listen before server is initialized`, ProtocolError.PARAMETER_ERROR);
 
@@ -139,25 +131,26 @@ class KademliaNode {
       this.handleNewSocket(socket, this.nodeId);
     });
 
-    this.handlePeerConnection(async (p: number) => {});
-    this.handlePeerDisconnect(async (p: number) => {});
+    this.handlePeerConnection();
+    this.handlePeerDisconnect();
 
-    this.handleBroadcastMessage(async () => {});
-    this.handleDirectMessage(async () => {});
+    this.handleBroadcastMessage();
+    this.handleDirectMessage();
 
     this.connect(this.port + 1000, () => {
       console.log(`Connection to ${this.port + 1000} established.`);
     });
+
     return (cb) => this.server.close(cb);
   }
 
   private handleNewSocket = (socket: WebSocket, nodeId: number, emitConnect = true) => {
     const connectionId = nodeId.toString();
     this.connections.set(connectionId, socket);
+
     if (emitConnect) this.emitter.emitConnect(this.nodeId.toString(), false);
 
     socket.on("message", (message: any) => {
-      // console.log(message);
       const receivedData = JSON.parse(message);
       this.emitter.emitMessage(connectionId, receivedData, false);
     });
@@ -172,7 +165,6 @@ class KademliaNode {
     });
   };
 
-  // connect and listen logic
   public connect = (port: number, cb?: () => void) => {
     const socket = new WebSocket(`ws://localhost:${port}`);
 
@@ -188,16 +180,17 @@ class KademliaNode {
     return () => socket.terminate();
   };
 
-  // event handler logic
-  private handlePeerConnection = (callback?: (p: number, type: string) => Promise<void>) => {
+  private handlePeerConnection = (callback?: () => Promise<void>) => {
     this.on("connect", async ({ nodeId }: { nodeId: string }) => {
       console.log(`New node connected: ${nodeId}`);
+      await callback();
     });
   };
 
-  private handlePeerDisconnect = (callback?: (p: number, type: string) => Promise<void>) => {
+  private handlePeerDisconnect = (callback?: () => Promise<void>) => {
     this.on("disconnect", async ({ nodeId }: { nodeId: string }) => {
       console.log(`Node disconnected: ${nodeId}`);
+      await callback();
     });
   };
   public send = (contact: number, type: any, data: any) => {
@@ -298,7 +291,7 @@ class KademliaNode {
   private async discoverNodes(): Promise<void> {
     while (!this.stopDiscovery) {
       const closeNodes = await this.findNodes(this.nodeId);
-      // console.log(closeNodes);
+
       closeNodes.forEach((n) => {
         this.table.updateTable(n);
 
@@ -306,15 +299,8 @@ class KademliaNode {
           this.connect(n + 4000, () => {
             console.log(`Connection to ${n + 4000} established.`);
           });
-        } else {
-          //     const socket = this.connections.get(n.toString());
-          //     if (socket) socket.send(JSON.stringify({ message: "heyyy" }));
         }
       });
-      // this.broadcast({
-      //   message: `${this.nodeId} is starting a new sign session`,
-      //   type: "MESSAGE_TYPE.signSessionInit",
-      // });
       await this.sleep(5000);
     }
   }
@@ -353,7 +339,6 @@ class KademliaNode {
   };
 
   private sendTCP = (nodeId: string, data: any) => {
-    //     const connectionId = this.neighbors.get(nodeId);
     this._send(nodeId, { type: "message", data });
   };
 
@@ -370,9 +355,7 @@ class KademliaNode {
 
   private handleBroadcastMessage = (callback?: () => Promise<void>) => {
     this.on("broadcast", async ({ message }: { message: any }) => {
-      // this.seenMessages.set(packet.id);
-      console.log(this.port);
-
+      // TO-DO
       await callback();
     });
   };
@@ -380,6 +363,7 @@ class KademliaNode {
   private handleDirectMessage = (callback?: () => Promise<void>) => {
     this.on("direct", async ({ message }: { message: any }) => {
       try {
+        // TO-DO
         await callback();
       } catch (error) {
         console.log(error);

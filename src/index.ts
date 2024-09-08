@@ -38,7 +38,7 @@ async function main() {
     //     bootStrap1.start();
   }
   // const nodes = []
-  for (let i = 1; i < 32; i++) {
+  for (let i = 1; i < 16; i++) {
     const nodeId = Number(config.port) + i;
     const node = new KademliaNode(nodeId - 3000, nodeId);
     await node.start();

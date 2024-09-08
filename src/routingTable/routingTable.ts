@@ -49,6 +49,24 @@ class RoutingTable {
     return bucketsJson;
   };
 
+  public findClosestNode = (targetId: number): number | null => {
+    let closestNode: number | null = null;
+    let closestDistance: number | null = null;
+
+    for (const [_, nodes] of this.buckets.entries()) {
+      for (const nodeId of nodes.nodes) {
+        const distance = XOR(nodeId, targetId);
+        console.log(distance);
+        if (closestDistance === null || distance < closestDistance) {
+          closestDistance = distance;
+          closestNode = nodeId;
+        }
+      }
+    }
+
+    return closestNode;
+  };
+
   public updateTable(nodeId: number) {
     const bucket = this.findBucket(nodeId);
 

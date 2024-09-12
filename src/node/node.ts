@@ -14,381 +14,398 @@ type NodeID = string; // Node ID as a string, typically represented as a hexadec
 type Contact = { nodeId: NodeID; ip: string; port: number };
 
 class KademliaNode {
-  public address: string;
-  public port: number;
-  public nodeId: number;
-  public table: RoutingTable;
-  private socket: Socket;
-  public api: App;
-  private stopDiscovery = false;
-  public contacted = new Map<string, number>();
-  public seenMessages: Set<string> = new Set();
-  public messages = new Map<string, string>();
+	public address: string;
+	public port: number;
+	public nodeId: number;
+	public table: RoutingTable;
+	private socket: Socket;
+	public api: App;
+	private stopDiscovery = false;
+	public contacted = new Map<string, number>();
+	public seenMessages: Set<string> = new Set();
+	public messages = new Map<string, string>();
 
-  public readonly connections: Map<string, WebSocket>;
+	public readonly connections: Map<string, WebSocket>;
 
-  public shortlist: number[] = [];
-  public currentClosestNode: number;
-  public closestNodes: boolean[] = [];
+	public shortlist: number[] = [];
+	public currentClosestNode: number;
+	public closestNodes: boolean[] = [];
 
-  private readonly emitter: P2PNetworkEventEmitter;
-  private server: Server;
+	private readonly emitter: P2PNetworkEventEmitter;
+	private server: Server;
 
-  on: (event: string, listener: (...args: any[]) => void) => void;
-  off: (event: string, listener: (...args: any[]) => void) => void;
-  private isInitialized: boolean = false;
+	on: (event: string, listener: (...args: any[]) => void) => void;
+	off: (event: string, listener: (...args: any[]) => void) => void;
+	private isInitialized: boolean = false;
 
-  constructor(id: number, port: number) {
-    this.nodeId = id;
-    this.port = port;
-    this.address = "127.0.0.1";
-    this.connections = new Map();
+	constructor(id: number, port: number) {
+		this.nodeId = id;
+		this.port = port;
+		this.address = "127.0.0.1";
+		this.connections = new Map();
 
-    this.emitter = new P2PNetworkEventEmitter(false);
-    this.emitter.on.bind(this.emitter);
-    this.emitter.off.bind(this.emitter);
+		this.emitter = new P2PNetworkEventEmitter(false);
+		this.emitter.on.bind(this.emitter);
+		this.emitter.off.bind(this.emitter);
 
-    this.on = (e: string, l: Listener) => this.emitter.on(e, l);
-    this.off = (e: string, l: Listener) => this.emitter.on(e, l);
+		this.on = (e: string, l: Listener) => this.emitter.on(e, l);
+		this.off = (e: string, l: Listener) => this.emitter.on(e, l);
 
-    this.api = new App(this, this.port);
-    this.table = new RoutingTable(this.nodeId, this);
-    this.server = new WebSocket.Server({ port: this.port + 1000 });
+		this.api = new App(this, this.port);
+		this.table = new RoutingTable(this.nodeId, this);
+		this.server = new WebSocket.Server({ port: this.port + 1000 });
 
-    this.socket = dgram.createSocket("udp4");
-    this.socket.on("message", this.handleMessage);
-    this.api.listen();
+		this.socket = dgram.createSocket("udp4");
+		this.socket.on("message", this.handleMessage);
+		this.api.listen();
 
-    this.initState();
-  }
+		this.initState();
+	}
 
-  public async start() {
-    try {
-      this.socket.bind(this.port, () => {
-        this.table.updateTable(0);
-        this.startNodeDiscovery();
-      });
-    } catch (err) {
-      console.log(err);
-    }
-  }
+	public async start() {
+		try {
+			this.socket.bind(this.port, () => {
+				this.table.updateTable(0);
+				this.startNodeDiscovery();
+			});
+		} catch (err) {
+			console.log(err);
+		}
+	}
 
-  // server init
-  private initState(): void {
-    this.emitter.on("_connect", (connectionId) => {
-      this._send(connectionId.connectionId, {
-        type: "handshake",
-        data: { nodeId: connectionId },
-      });
-    });
+	// server init
+	private initState(): void {
+		this.emitter.on("_connect", (connectionId) => {
+			this._send(connectionId.connectionId, {
+				type: "handshake",
+				data: { nodeId: connectionId },
+			});
+		});
 
-    this.emitter.on("_disconnect", (connectionId) => {
-      this.emitter.emitDisconnect(connectionId, true);
-    });
+		this.emitter.on("_disconnect", (connectionId) => {
+			this.emitter.emitDisconnect(connectionId, true);
+		});
 
-    this.emitter.on("_message", async ({ connectionId, message }) => {
-      const { type, data } = message;
-      if (type === "handshake") {
-        const { nodeId } = data;
-        this.emitter.emitConnect(nodeId, true);
-      }
+		this.emitter.on("_message", async ({ connectionId, message }) => {
+			const { type, data } = message;
+			if (type === "handshake") {
+				const { nodeId } = data;
+				this.emitter.emitConnect(nodeId, true);
+			}
 
-      if (type === "message") {
-        this.emitter.emitMessage(connectionId, data, true);
-      }
-    });
+			if (type === "message") {
+				this.emitter.emitMessage(connectionId, data, true);
+			}
+		});
 
-    this.emitter.on("message", ({ nodeId, data: packet }) => {
-      if (this.seenMessages.has(packet.id) || packet.ttl < 1) return;
+		this.emitter.on("message", ({ nodeId, data: packet }) => {
+			if (this.seenMessages.has(packet.id) || packet.ttl < 1) return;
 
-      console.log(`node ${nodeId} is broadcasting to ${this.shortlist} ${this.nodeId}`);
+			console.log(`node ${nodeId} is broadcasting to ${this.shortlist} ${this.nodeId}`);
 
-      const message = JSON.stringify({ id: packet.id, msg: packet.message.message });
-      this.messages.set(packet.id, message);
+			const message = JSON.stringify({ id: packet.id, msg: packet.message.message });
+			this.messages.set(packet.id, message);
 
-      if (packet.type === "broadcast") {
-        if (packet.origin === this.port.toString()) {
-          this.emitter.emitBroadcast(packet.message, packet.origin);
-        } else {
-          this.broadcast(packet.message, packet.id, packet.origin);
-        }
-      }
+			if (packet.type === "broadcast") {
+				if (packet.origin === this.port.toString()) {
+					this.emitter.emitBroadcast(packet.message, packet.origin);
+				} else {
+					this.broadcast(packet.message, packet.id, packet.origin);
+				}
+			}
 
-      if (packet.type === "direct") {
-        if (packet.destination === this.port) {
-          this.emitter.emitDirect(packet.message, packet.origin);
-        } else {
-          this.sendDirect(packet.destination, packet.message, packet.id, packet.origin, packet.ttl - 1);
-        }
-      }
-    });
+			if (packet.type === "direct") {
+				if (packet.destination === this.port) {
+					this.emitter.emitDirect(packet.message, packet.origin);
+				} else {
+					this.sendDirect(
+						packet.destination,
+						packet.message,
+						packet.id,
+						packet.origin,
+						packet.ttl - 1,
+					);
+				}
+			}
+		});
 
-    this.isInitialized = true;
-    this.listen();
-  }
+		this.isInitialized = true;
+		this.listen();
+	}
 
-  public listen(): (cb?: any) => void {
-    if (!this.isInitialized)
-      throw new ErrorWithCode(`Cannot listen before server is initialized`, ProtocolError.PARAMETER_ERROR);
+	public listen(): (cb?: any) => void {
+		if (!this.isInitialized)
+			throw new ErrorWithCode(
+				`Cannot listen before server is initialized`,
+				ProtocolError.PARAMETER_ERROR,
+			);
 
-    this.server.on("connection", (socket) => {
-      this.handleNewSocket(socket, this.nodeId);
-    });
+		this.server.on("connection", (socket) => {
+			this.handleNewSocket(socket, this.nodeId);
+		});
 
-    this.handlePeerConnection();
-    this.handlePeerDisconnect();
+		this.handlePeerConnection();
+		this.handlePeerDisconnect();
 
-    this.handleBroadcastMessage();
-    this.handleDirectMessage();
+		this.handleBroadcastMessage();
+		this.handleDirectMessage();
 
-    this.connect(this.port + 1000, () => {
-      console.log(`Connection to ${this.port + 1000} established.`);
-    });
+		this.connect(this.port + 1000, () => {
+			console.log(`Connection to ${this.port + 1000} established.`);
+		});
 
-    return (cb) => this.server.close(cb);
-  }
+		return (cb) => this.server.close(cb);
+	}
 
-  private handleNewSocket = (socket: WebSocket, nodeId: number, emitConnect = true) => {
-    const connectionId = nodeId.toString();
-    this.connections.set(connectionId, socket);
+	private handleNewSocket = (socket: WebSocket, nodeId: number, emitConnect = true) => {
+		const connectionId = nodeId.toString();
+		this.connections.set(connectionId, socket);
 
-    if (emitConnect) this.emitter.emitConnect(this.nodeId.toString(), false);
+		if (emitConnect) this.emitter.emitConnect(this.nodeId.toString(), false);
 
-    socket.on("message", (message: any) => {
-      const receivedData = JSON.parse(message);
-      this.emitter.emitMessage(connectionId, receivedData, false);
-    });
+		socket.on("message", (message: any) => {
+			const receivedData = JSON.parse(message);
+			this.emitter.emitMessage(connectionId, receivedData, false);
+		});
 
-    socket.on("close", () => {
-      this.connections.delete(connectionId);
-      this.emitter.emitDisconnect(connectionId, false);
-    });
+		socket.on("close", () => {
+			this.connections.delete(connectionId);
+			this.emitter.emitDisconnect(connectionId, false);
+		});
 
-    socket.on("error", (err) => {
-      console.error(`Socket connection error: ${err.message}`);
-    });
-  };
+		socket.on("error", (err) => {
+			console.error(`Socket connection error: ${err.message}`);
+		});
+	};
 
-  public connect = (port: number, cb?: () => void) => {
-    const socket = new WebSocket(`ws://localhost:${port}`);
+	public connect = (port: number, cb?: () => void) => {
+		const socket = new WebSocket(`ws://localhost:${port}`);
 
-    socket.on("error", (err) => {
-      console.error(`Socket connection error: ${err.message}`);
-    });
+		socket.on("error", (err) => {
+			console.error(`Socket connection error: ${err.message}`);
+		});
 
-    socket.on("open", async () => {
-      this.handleNewSocket(socket, port - 4000);
-      cb?.();
-    });
+		socket.on("open", async () => {
+			this.handleNewSocket(socket, port - 4000);
+			cb?.();
+		});
 
-    return () => socket.terminate();
-  };
+		return () => socket.terminate();
+	};
 
-  private handlePeerConnection = (callback?: () => Promise<void>) => {
-    this.on("connect", async ({ nodeId }: { nodeId: { connectionId: string } }) => {
-      console.log(`Node ${this.nodeId} connected to: ${nodeId.connectionId}`);
-      // await callback();
-    });
-  };
+	private handlePeerConnection = (callback?: () => Promise<void>) => {
+		this.on("connect", async ({ nodeId }: { nodeId: { connectionId: string } }) => {
+			console.log(`Node ${this.nodeId} connected to: ${nodeId.connectionId}`);
+			// await callback();
+		});
+	};
 
-  private handlePeerDisconnect = (callback?: () => Promise<void>) => {
-    this.on("disconnect", async ({ nodeId }: { nodeId: string }) => {
-      console.log(`Node disconnected: ${nodeId}`);
-      // await callback();
-    });
-  };
-  public send = (contact: number, type: any, data: any) => {
-    const message = JSON.stringify({
-      type,
-      data: data,
-      fromNodeId: this.nodeId,
-      fromPort: this.port,
-    });
+	private handlePeerDisconnect = (callback?: () => Promise<void>) => {
+		this.on("disconnect", async ({ nodeId }: { nodeId: string }) => {
+			console.log(`Node disconnected: ${nodeId}`);
+			// await callback();
+		});
+	};
+	public send = (contact: number, type: any, data: any) => {
+		const message = JSON.stringify({
+			type,
+			data: data,
+			fromNodeId: this.nodeId,
+			fromPort: this.port,
+		});
 
-    this.socket.send(message, contact, this.address);
-  };
+		this.socket.send(message, contact, this.address);
+	};
 
-  public handnleFindNodeRequest = (nodeResponse: number[], contact: number) => {
-    let hasCloserThanExist = false;
+	public handnleFindNodeRequest = (nodeResponse: number[], contact: number) => {
+		let hasCloserThanExist = false;
 
-    this.contacted.set(contact.toString(), contact);
-    for (const closerNode of nodeResponse) {
-      this.shortlist.push(closerNode);
+		this.contacted.set(contact.toString(), contact);
+		for (const closerNode of nodeResponse) {
+			this.shortlist.push(closerNode);
 
-      const currentDistance = this.table.getBucketIndex(this.currentClosestNode);
-      const distance = this.table.getBucketIndex(closerNode);
+			const currentDistance = this.table.getBucketIndex(this.currentClosestNode);
+			const distance = this.table.getBucketIndex(closerNode);
 
-      if (distance < currentDistance) {
-        this.currentClosestNode = closerNode;
-        hasCloserThanExist = true;
-      }
-    }
-    this.closestNodes.push(hasCloserThanExist);
-  };
-  private findNodes(key: number) {
-    this.shortlist = this.table.findNode(key, BIT_SIZE);
-    this.currentClosestNode = this.shortlist[0];
+			if (distance < currentDistance) {
+				this.currentClosestNode = closerNode;
+				hasCloserThanExist = true;
+			}
+		}
+		this.closestNodes.push(hasCloserThanExist);
+	};
+	private findNodes(key: number) {
+		this.shortlist = this.table.findNode(key, BIT_SIZE);
+		this.currentClosestNode = this.shortlist[0];
 
-    this.contactNearestNodes();
-    return Array.from(this.contacted.values());
-  }
+		this.contactNearestNodes();
+		return Array.from(this.contacted.values());
+	}
 
-  private contactNearestNodes = () => {
-    this.closestNodes = [];
-    for (const contact of this.shortlist) {
-      if (this.contacted.has(contact.toString())) {
-        continue;
-      }
-      this.send(3000 + contact, "FIND_NODE", {});
-    }
-    if (!this.closestNodes.length) return;
+	private contactNearestNodes = () => {
+		this.closestNodes = [];
+		for (const contact of this.shortlist) {
+			if (this.contacted.has(contact.toString())) {
+				continue;
+			}
+			this.send(3000 + contact, "FIND_NODE", {});
+		}
+		if (!this.closestNodes.length) return;
 
-    const isUpdatedClosest = this.closestNodes.some(Boolean);
-    if (isUpdatedClosest && this.contacted.size < BIT_SIZE) {
-      this.contactNearestNodes();
-    }
-  };
+		const isUpdatedClosest = this.closestNodes.some(Boolean);
+		if (isUpdatedClosest && this.contacted.size < BIT_SIZE) {
+			this.contactNearestNodes();
+		}
+	};
 
-  private handleMessage = async (msg: Buffer, info: dgram.RemoteInfo) => {
-    try {
-      const message = JSON.parse(msg.toString());
-      const externalContact = message.fromNodeId;
-      this.table.updateTable(externalContact);
+	private handleMessage = async (msg: Buffer, info: dgram.RemoteInfo) => {
+		try {
+			const message = JSON.parse(msg.toString());
+			const externalContact = message.fromNodeId;
+			this.table.updateTable(externalContact);
 
-      switch (message.type) {
-        case "REPLY": {
-          console.log(message);
-          break;
-        }
-        case "PING": {
-          this.send(info.port, "REPLY", { buckets: this.table.getAllBuckets() });
-          break;
-        }
-        case "FIND_NODE": {
-          const closestNodes = this.table.findNode(externalContact);
-          this.send(info.port, "REPLY_FIND_NODE", {
-            buckets: this.table.getAllBuckets(),
-            closestNodes,
-          });
-          break;
-        }
-        case "REPLY_FIND_NODE": {
-          message.data.closestNodes.forEach((b) => {
-            this.table.updateTable(b);
-          });
-          this.handnleFindNodeRequest(message.data.closestNodes, externalContact);
-          break;
-        }
-        default:
-          return;
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  };
+			switch (message.type) {
+				case "REPLY": {
+					console.log(message);
+					break;
+				}
+				case "PING": {
+					this.send(info.port, "REPLY", { buckets: this.table.getAllBuckets() });
+					break;
+				}
+				case "FIND_NODE": {
+					const closestNodes = this.table.findNode(externalContact);
+					this.send(info.port, "REPLY_FIND_NODE", {
+						buckets: this.table.getAllBuckets(),
+						closestNodes,
+					});
+					break;
+				}
+				case "REPLY_FIND_NODE": {
+					message.data.closestNodes.forEach((b) => {
+						this.table.updateTable(b);
+					});
+					this.handnleFindNodeRequest(message.data.closestNodes, externalContact);
+					break;
+				}
+				default:
+					return;
+			}
+		} catch (error) {
+			console.error(error);
+		}
+	};
 
-  public close() {
-    this.socket.removeAllListeners("message");
-    this.socket.close();
-  }
+	public close() {
+		this.socket.removeAllListeners("message");
+		this.socket.close();
+	}
 
-  private async discoverNodes(): Promise<void> {
-    while (!this.stopDiscovery) {
-      const closeNodes = await this.findNodes(this.nodeId);
+	private async discoverNodes(): Promise<void> {
+		while (!this.stopDiscovery) {
+			const closeNodes = await this.findNodes(this.nodeId);
 
-      closeNodes.forEach((n) => {
-        this.table.updateTable(n);
+			closeNodes.forEach((n) => {
+				this.table.updateTable(n);
 
-        if (!this.connections.has(n.toString())) {
-          this.connect(n + 4000, () => {
-            console.log(`Connection to ${n + 4000} established.`);
-          });
-        }
-      });
-      await this.sleep(5000);
-    }
-  }
+				if (!this.connections.has(n.toString())) {
+					this.connect(n + 4000, () => {
+						console.log(`Connection to ${n + 4000} established.`);
+					});
+				}
+			});
+			await this.sleep(5000);
+		}
+	}
 
-  public broadcast = (message: any, id: string = v4(), origin: string = this.port.toString(), ttl: number = 255) => {
-    this.sendPacket({ id, ttl, type: "broadcast", message, origin });
-  };
+	public broadcast = (
+		message: any,
+		id: string = v4(),
+		origin: string = this.port.toString(),
+		ttl: number = 255,
+	) => {
+		this.sendPacket({ id, ttl, type: "broadcast", message, origin });
+	};
 
-  public sendDirect = (
-    destination: string,
-    message: any,
-    id: string = v4(),
-    origin: string = this.port.toString(),
-    ttl: number = 255,
-  ) => {
-    this.sendPacket({
-      id,
-      ttl,
-      type: "direct",
-      message,
-      destination,
-      origin,
-    });
-  };
+	public sendDirect = (
+		destination: string,
+		message: any,
+		id: string = v4(),
+		origin: string = this.port.toString(),
+		ttl: number = 255,
+	) => {
+		this.sendPacket({
+			id,
+			ttl,
+			type: "direct",
+			message,
+			destination,
+			origin,
+		});
+	};
 
-  private sendPacket = (packet: any) => {
-    if (packet.type === "direct") {
-      this.sendTCP(packet.destination, packet);
-      this.seenMessages.add(packet.id);
-    } else {
-      for (const $nodeId of this.connections.keys()) {
-        this.sendTCP($nodeId, packet);
-        this.seenMessages.add(packet.id);
-      }
-    }
-  };
+	private sendPacket = (packet: any) => {
+		if (packet.type === "direct") {
+			this.sendTCP(packet.destination, packet);
+			this.seenMessages.add(packet.id);
+		} else {
+			for (const $nodeId of this.connections.keys()) {
+				this.sendTCP($nodeId, packet);
+				this.seenMessages.add(packet.id);
+			}
+		}
+	};
 
-  private sendTCP = (nodeId: string, data: any) => {
-    this._send(nodeId, { type: "message", data });
-  };
+	private sendTCP = (nodeId: string, data: any) => {
+		this._send(nodeId, { type: "message", data });
+	};
 
-  private _send = (connectionId: string, message: any) => {
-    const socket = this.connections.get(connectionId);
+	private _send = (connectionId: string, message: any) => {
+		const socket = this.connections.get(connectionId);
 
-    if (!socket)
-      throw new ErrorWithCode(
-        `Attempt to send data to connection that does not exist ${connectionId}`,
-        ProtocolError.INTERNAL_ERROR,
-      );
-    socket.send(JSON.stringify(message));
-  };
+		if (!socket)
+			throw new ErrorWithCode(
+				`Attempt to send data to connection that does not exist ${connectionId}`,
+				ProtocolError.INTERNAL_ERROR,
+			);
+		socket.send(JSON.stringify(message));
+	};
 
-  private handleBroadcastMessage = (callback?: () => Promise<void>) => {
-    this.on("broadcast", async ({ message }: { message: any }) => {
-      // TO-DO
-      await callback();
-    });
-  };
+	private handleBroadcastMessage = (callback?: () => Promise<void>) => {
+		this.on("broadcast", async ({ message }: { message: any }) => {
+			// TO-DO
+			await callback();
+		});
+	};
 
-  private handleDirectMessage = (callback?: () => Promise<void>) => {
-    this.on("direct", async ({ message }: { message: any }) => {
-      try {
-        // TO-DO
-        await callback();
-      } catch (error) {
-        console.log(error);
-        throw new ErrorWithCode(`Error prcessing direct message for ${this.nodeId}`, ProtocolError.INTERNAL_ERROR);
-      }
-    });
-  };
+	private handleDirectMessage = (callback?: () => Promise<void>) => {
+		this.on("direct", async ({ message }: { message: any }) => {
+			try {
+				// TO-DO
+				await callback();
+			} catch (error) {
+				console.log(error);
+				throw new ErrorWithCode(
+					`Error prcessing direct message for ${this.nodeId}`,
+					ProtocolError.INTERNAL_ERROR,
+				);
+			}
+		});
+	};
 
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
+	private sleep(ms: number): Promise<void> {
+		return new Promise((resolve) => setTimeout(resolve, ms));
+	}
 
-  startNodeDiscovery(): void {
-    this.stopDiscovery = false;
-    this.discoverNodes();
-  }
+	startNodeDiscovery(): void {
+		this.stopDiscovery = false;
+		this.discoverNodes();
+	}
 
-  stopNodeDiscovery(): void {
-    this.stopDiscovery = true;
-    console.log("Stopping node discovery");
-  }
+	stopNodeDiscovery(): void {
+		this.stopDiscovery = true;
+		console.log("Stopping node discovery");
+	}
 }
 
 export default KademliaNode;

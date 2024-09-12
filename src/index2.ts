@@ -21,32 +21,21 @@
 //   console.error("Error:", error);
 // });
 import config from "./config/config";
-import KademliaNode from "./node/node";
+import WebSocketTransport from "./transports/tcp/wsTransport";
 // ? BIT_SIZE constant (assuming 4 for this example)
 export const delay = async (delayTime: number) => await new Promise((resolve) => setTimeout(resolve, delayTime));
 
 async function main() {
-  // ! Create multiple node instances with unique IDs and ports
-  const nodes = [];
+  const port = Number(config.port);
+  const nodeId = port - 3000;
 
-  if (config.port === "3000") {
-    const bootStrap = new KademliaNode(Number(config.port) - 3000, 3000);
-    //     const bootStrap1 = new KademliaNode(1, 3001);
+  const ports = [];
 
-    bootStrap.start();
-    nodes.push(bootStrap);
-    //     bootStrap1.start();
+  for (let i = 3000; i < port; i++) {
+    ports.push(i);
   }
-  // const nodes = []
-  for (let i = 1; i < 16; i++) {
-    const nodeId = Number(config.port) + i;
-    const node = new KademliaNode(nodeId - 3000, nodeId);
-    await node.start();
-    nodes.push(node);
-  }
-
-  //   await delay(2000);
-  //   nodes.forEach((n) => n.init());
+  const node = new WebSocketTransport(nodeId, port, ports);
+  await node.listen();
 }
 
 main().catch((error) => {

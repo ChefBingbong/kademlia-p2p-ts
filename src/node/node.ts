@@ -101,8 +101,11 @@ class KademliaNode {
     this.emitter.on("message", ({ nodeId, data: packet }) => {
       if (this.seenMessages.has(packet.id) || packet.ttl < 1) return;
 
+      console.log(`node ${nodeId} is broadcasting to ${this.shortlist} ${this.nodeId}`);
+
       const message = JSON.stringify({ id: packet.id, msg: packet.message.message });
       this.messages.set(packet.id, message);
+
       if (packet.type === "broadcast") {
         if (packet.origin === this.port.toString()) {
           this.emitter.emitBroadcast(packet.message, packet.origin);
@@ -182,8 +185,8 @@ class KademliaNode {
   };
 
   private handlePeerConnection = (callback?: () => Promise<void>) => {
-    this.on("connect", async ({ nodeId }: { nodeId: string }) => {
-      console.log(`New node connected: ${nodeId}`);
+    this.on("connect", async ({ nodeId }: { nodeId: { connectionId: string } }) => {
+      console.log(`Node ${this.nodeId} connected to: ${nodeId.connectionId}`);
       // await callback();
     });
   };
@@ -222,7 +225,7 @@ class KademliaNode {
     }
     this.closestNodes.push(hasCloserThanExist);
   };
-  private async findNodes(key: number) {
+  private findNodes(key: number) {
     this.shortlist = this.table.findNode(key, BIT_SIZE);
     this.currentClosestNode = this.shortlist[0];
 

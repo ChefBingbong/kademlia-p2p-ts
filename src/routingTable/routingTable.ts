@@ -80,20 +80,6 @@ class RoutingTable {
     return closestNode;
   };
 
-  public async updateTable(nodeId: number) {
-    const bucket = this.findBucket(nodeId);
-
-    if (bucket?.nodes.includes(nodeId)) {
-      bucket.moveToEnd(bucket.bucketId);
-      return;
-    }
-
-    if (bucket?.nodes.length < bucket?.bucketSize) {
-      bucket.nodes.push(nodeId);
-      return;
-    }
-  }
-
   public findNode(key: number, count: number = BIT_SIZE): number[] {
     const closestNodes: CloseNodes[] = [];
     const bucketIndex = this.getBucketIndex(key);

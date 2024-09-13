@@ -20,7 +20,7 @@ export class KBucket {
     const current = this.nodes.find((n) => n === nodeId);
 
     if (current) {
-      this.moveToEnd(current);
+      this.moveToFront(current);
       return;
     }
 
@@ -31,14 +31,11 @@ export class KBucket {
       return;
     }
 
-    if (!this.nodes.includes(nodeId)) {
-      this.nodes.shift();
-      this.nodes.push(nodeId);
-    }
+    this.nodes.shift();
   }
 
-  public moveToEnd(nodeId: number) {
-    this.nodes = [...this.nodes.filter((n) => n !== nodeId), nodeId];
+  public moveToFront(nodeId: number) {
+    this.nodes = [nodeId, ...this.nodes.filter((n) => n !== nodeId)];
   }
 
   toJSON() {

@@ -132,6 +132,7 @@ class RoutingTable {
 
 	private addNodes = (key: number, bucketIndex: number, nodes: CloseNodes[]) => {
 		const bucket = this.buckets.get(bucketIndex);
+		console.log(bucket);
 		if (!bucket) return;
 
 		for (const node of bucket.getNodes()) {

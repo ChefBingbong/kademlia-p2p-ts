@@ -41,7 +41,7 @@ class UDPTransport {
 		type: any,
 		data: any,
 		resId?: string,
-		callback?: () => Promise<void>,
+		callback?: (params: any, resolve: (value?: unknown) => void, reject: (reason?: any) => void) => void,
 	) => {
 		try {
 			const nodeResponse = new Promise<any>((resolve, reject) => {
@@ -53,7 +53,8 @@ class UDPTransport {
 					fromNodeId: this.nodeId,
 				});
 				this.socket.send(message, contact, this.address, () => {
-					resolve(callback());
+					const args = { type, data, responseId };
+					callback(args, resolve, reject);
 				});
 			});
 			const error = new Error("send timeout");
@@ -65,9 +66,9 @@ class UDPTransport {
 		}
 	};
 
-	public onMessage(callback: (message: string, remoteInfo: dgram.RemoteInfo) => void) {
+	public onMessage(callback: (msg: Buffer, info: dgram.RemoteInfo) => Promise<void>) {
 		this.socket.on("message", (message, remoteInfo) => {
-			callback(message.toString(), remoteInfo);
+			callback(message, remoteInfo);
 		});
 	}
 

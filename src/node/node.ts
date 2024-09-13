@@ -1,15 +1,15 @@
 import * as dgram from "dgram";
-import { Socket } from "dgram";
 import { v4 } from "uuid";
 import { Server, WebSocket } from "ws";
 import { App } from "../http/app";
 import RoutingTable from "../routingTable/routingTable";
+import WebSocketTransport from "../transports/tcp/wsTransport";
+import UDPTransport from "../transports/udp/udpTransport";
 import { ErrorWithCode, ProtocolError } from "../utils/errors";
 import { BIT_SIZE } from "./constants";
 // import { Neighbours } from "../contacts/contacts";
 // import { IContact } from "../contacts/types";
 import { Listener, P2PNetworkEventEmitter } from "./eventEmitter";
-import { timeoutReject } from "./utils";
 
 type NodeID = string; // Node ID as a string, typically represented as a hexadecimal string
 type Contact = { nodeId: NodeID; ip: string; port: number };
@@ -19,7 +19,7 @@ class KademliaNode {
 	public port: number;
 	public nodeId: number;
 	public table: RoutingTable;
-	private socket: Socket;
+	public s = false;
 	public api: App;
 	private stopDiscovery = false;
 	public contacted = new Map<string, number>();
@@ -34,6 +34,8 @@ class KademliaNode {
 	public closestNodes: boolean[] = [];
 
 	private readonly emitter: P2PNetworkEventEmitter;
+	private udpTransport: UDPTransport;
+	private wsTransport: WebSocketTransport;
 	private server: Server;
 
 	on: (event: string, listener: (...args: any[]) => void) => void;
@@ -47,6 +49,9 @@ class KademliaNode {
 		this.connections = new Map();
 		this.nodeResponses = new Map();
 
+		this.udpTransport = new UDPTransport(this.nodeId, this.port);
+		// this.wsTransport = new WebSocketTransport(this.nodeId, this.port, []);
+
 		this.emitter = new P2PNetworkEventEmitter(false);
 		this.emitter.on.bind(this.emitter);
 		this.emitter.off.bind(this.emitter);
@@ -58,25 +63,13 @@ class KademliaNode {
 		this.table = new RoutingTable(this.nodeId, this);
 		this.server = new WebSocket.Server({ port: this.port + 1000 });
 
-		this.socket = dgram.createSocket("udp4");
-		this.socket.on("message", this.handleMessage);
 		this.api.listen();
-
 		this.initState();
 	}
 
 	public async start() {
-		return new Promise((res, rej) => {
-			try {
-				this.socket.bind(this.port, async () => {
-					await this.table.updateTables(0);
-					this.startNodeDiscovery();
-					res(null);
-				});
-			} catch (err) {
-				rej(err);
-			}
-		});
+		await this.table.updateTables(0);
+		this.startNodeDiscovery();
 	}
 
 	// server init
@@ -156,6 +149,8 @@ class KademliaNode {
 		this.handleBroadcastMessage();
 		this.handleDirectMessage();
 
+		this.udpTransport.onMessage(this.handleMessage);
+
 		this.connect(this.port + 1000, () => {
 			console.log(`Connection to ${this.port + 1000} established.`);
 		});
@@ -213,36 +208,19 @@ class KademliaNode {
 		});
 	};
 
-	public send = async (contact: number, type: any, data: any, resId?: string) => {
-		try {
-			const nodeResponse = new Promise<any>((resolve: any, reject) => {
-				const responseId = resId ?? v4();
-				const message = JSON.stringify({
-					type,
-					resId: responseId,
-					data: data,
-					fromNodeId: this.nodeId,
-					fromPort: this.port,
-				});
-				this.socket.send(message, contact, this.address, () => {
-					if (type === "REPLY") resolve();
-					this.emitter.once(`response_${responseId}`, (data: any) => {
-						if (data.error) {
-							return reject(data.error);
-						}
-						resolve(data.closestNodes);
-					});
-				});
-			});
-			const result = await Promise.race([
-				nodeResponse,
-				timeoutReject(new Error("send node response timeout")),
-			]);
-			return result;
-		} catch (e) {
-			console.log(e);
-			return [];
-		}
+	public udpMessageResolver = (
+		params: any,
+		resolve: (value?: unknown) => void,
+		reject: (reason?: any) => void,
+	) => {
+		const { type, responseId } = params;
+		if (type === "REPLY") resolve();
+		this.emitter.once(`response_${responseId}`, (data: any) => {
+			if (data.error) {
+				return reject(data.error);
+			}
+			resolve(data.closestNodes);
+		});
 	};
 
 	private handleFindNodeQuery = async (
@@ -287,7 +265,13 @@ class KademliaNode {
 			if (contactedNodes.has(node.toString())) {
 				continue;
 			}
-			const findNodeResponse = this.send(3000 + node, "FIND_NODE", {});
+			const findNodeResponse = this.udpTransport.sendMessage(
+				3000 + node,
+				"FIND_NODE",
+				{},
+				undefined,
+				this.udpMessageResolver,
+			);
 			findNodePromises.push(
 				this.handleFindNodeQuery(
 					findNodeResponse,
@@ -313,7 +297,7 @@ class KademliaNode {
 	};
 	private findNodes = async (key: number) => {
 		const contacted = new Map<string, any>();
-		const shortlist = this.table.findNode(key, BIT_SIZE);
+		const shortlist = this.table.findNode(key);
 
 		let currentClosestNode = shortlist[0];
 		await this.findNodeRecursiveSearch(contacted, shortlist, currentClosestNode);
@@ -342,7 +326,13 @@ class KademliaNode {
 				}
 				case "FIND_NODE": {
 					const closestNodes = this.table.findNode(externalContact);
-					await this.send(info.port, "REPLY", { closestNodes }, message.resId);
+					await this.udpTransport.sendMessage(
+						info.port,
+						"REPLY",
+						{ closestNodes },
+						message.resId,
+						this.udpMessageResolver,
+					);
 					break;
 				}
 
@@ -354,15 +344,12 @@ class KademliaNode {
 		}
 	};
 
-	public close() {
-		this.socket.removeAllListeners("message");
-		this.socket.close();
-	}
-
 	private async discoverNodes(): Promise<void> {
 		while (!this.stopDiscovery) {
+			// this.s = true
 			const closeNodes = await this.findNodes(this.nodeId);
-			await this.table.updateTables(closeNodes);
+			if (!this.s) await this.table.updateTables(closeNodes);
+			this.s = true;
 
 			closeNodes.forEach((n) => {
 				if (!this.connections.has(n.toString())) {

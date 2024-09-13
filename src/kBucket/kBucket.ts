@@ -30,7 +30,12 @@ export class KBucket {
 			}
 			return;
 		}
+		// TODO: separate timeout and other errors
 
+		if (!this.nodes.includes(nodeId)) {
+			this.nodes.shift();
+			this.nodes.push(nodeId);
+		}
 		//     try {
 		//       this.node.send(3000 + nodeId, "PING", { buckets: this.node.table.getAllBuckets() });
 		//     } catch (e) {}

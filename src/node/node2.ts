@@ -9,7 +9,7 @@ import { BIT_SIZE } from "./constants";
 // import { Neighbours } from "../contacts/contacts";
 // import { IContact } from "../contacts/types";
 import { Listener, P2PNetworkEventEmitter } from "./eventEmitter";
-import { timeoutReject } from "./utils";
+import { timeout } from "./utils";
 
 type NodeID = string; // Node ID as a string, typically represented as a hexadecimal string
 type Contact = { nodeId: NodeID; ip: string; port: number };
@@ -27,7 +27,6 @@ class KademliaNode {
 	public messages = new Map<string, string>();
 
 	public readonly connections: Map<string, WebSocket>;
-	private nodeResponses: Map<string, { resolve: Function; type: any }>;
 
 	public shortlist: number[] = [];
 	public currentClosestNode: number;
@@ -35,6 +34,7 @@ class KademliaNode {
 
 	private readonly emitter: P2PNetworkEventEmitter;
 	private server: Server;
+	private nodeResponses: Map<string, { resolve: Function; type: any }>;
 
 	on: (event: string, listener: (...args: any[]) => void) => void;
 	off: (event: string, listener: (...args: any[]) => void) => void;
@@ -44,6 +44,7 @@ class KademliaNode {
 		this.nodeId = id;
 		this.port = port;
 		this.address = "127.0.0.1";
+
 		this.connections = new Map();
 		this.nodeResponses = new Map();
 
@@ -68,8 +69,8 @@ class KademliaNode {
 	public async start() {
 		return new Promise((res, rej) => {
 			try {
-				this.socket.bind(this.port, async () => {
-					await this.table.updateTables(0);
+				this.socket.bind(this.port, () => {
+					this.table.addBuckets(0);
 					this.startNodeDiscovery();
 					res(null);
 				});
@@ -212,131 +213,153 @@ class KademliaNode {
 			// await callback();
 		});
 	};
-
 	public send = async (contact: number, type: any, data: any, resId?: string) => {
-		try {
-			const nodeResponse = new Promise<any>((resolve: any, reject) => {
-				const responseId = resId ?? v4();
-				const message = JSON.stringify({
-					type,
-					resId: responseId,
-					data: data,
-					fromNodeId: this.nodeId,
-					fromPort: this.port,
-				});
-				this.socket.send(message, contact, this.address, () => {
-					if (type === "REPLY") resolve();
-					this.emitter.once(`response_${responseId}`, (data: any) => {
-						if (data.error) {
-							return reject(data.error);
-						}
-						resolve(data.closestNodes);
-					});
-				});
+		const responseId = resId ?? v4();
+
+		const nodeResponse = new Promise<any>((resolve: any, reject) => {
+			const message = JSON.stringify({
+				type,
+				resId: responseId,
+				data: data,
+				fromNodeId: this.nodeId,
+				fromPort: this.port,
 			});
-			const result = await Promise.race([
-				nodeResponse,
-				timeoutReject(new Error("send node response timeout")),
-			]);
+			this.socket.send(message, contact, this.address, (error) => {
+				if (error) return reject(error);
+
+				if (type === "REPLY") resolve();
+				else
+					this.nodeResponses.set(responseId, {
+						resolve,
+						type,
+					});
+			});
+		});
+
+		try {
+			const error = new Error(`timeout error: ${type}`);
+			Error.captureStackTrace(error);
+			const result = await timeout(nodeResponse, 30000, error);
 			return result;
-		} catch (e) {
-			console.log(e);
-			return [];
+		} finally {
+			this.nodeResponses.delete(responseId);
 		}
 	};
 
-	private handleFindNodeQuery = async (
-		closeNodesResponse: Promise<number[]>,
-		nodeId: number,
-		contactedNodes: Map<string, number>,
-		nodeShortlist: number[],
-		initialClosestNode: number,
-	) => {
+	public handnleFindNodeRequest = (nodeResponse: number[], contact: number) => {
 		let hasCloserThanExist = false;
 
-		try {
-			const closeNodes = await closeNodesResponse;
-			contactedNodes.set(nodeId.toString(), nodeId);
+		this.contacted.set(contact.toString(), contact);
+		for (const closerNode of nodeResponse) {
+			this.shortlist.push(closerNode);
 
-			for (const currentCloseNode of closeNodes) {
-				nodeShortlist.push(currentCloseNode);
+			const currentDistance = this.table.getBucketIndex(this.currentClosestNode);
+			const distance = this.table.getBucketIndex(closerNode);
 
-				const currentDistance = this.table.getBucketIndex(initialClosestNode);
-				const distance = this.table.getBucketIndex(currentCloseNode);
-
-				if (distance < currentDistance) {
-					initialClosestNode = currentCloseNode;
-					hasCloserThanExist = true;
-				}
+			if (distance < currentDistance) {
+				this.currentClosestNode = closerNode;
+				hasCloserThanExist = true;
 			}
-		} catch (e) {
-			console.error(e);
 		}
-
-		return hasCloserThanExist;
-	};
-
-	private findNodeRecursiveSearch = async (
-		contactedNodes: Map<string, number>,
-		nodeShortlist: number[],
-		initialClosestNode: number,
-	) => {
-		const findNodePromises: Array<Promise<boolean>> = [];
-
-		for (const node of nodeShortlist) {
-			if (contactedNodes.has(node.toString())) {
-				continue;
-			}
-			const findNodeResponse = this.send(3000 + node, "FIND_NODE", {});
-			findNodePromises.push(
-				this.handleFindNodeQuery(
-					findNodeResponse,
-					node,
-					contactedNodes,
-					nodeShortlist,
-					initialClosestNode,
-				),
-			);
-		}
-
-		if (!findNodePromises.length) {
-			console.log("No more contacts in shortlist");
-			return;
-		}
-
-		const results = await Promise.all(findNodePromises);
-		const isUpdatedClosest = results.some(Boolean);
-
-		if (isUpdatedClosest && contactedNodes.size < BIT_SIZE) {
-			await this.findNodeRecursiveSearch(contactedNodes, nodeShortlist, initialClosestNode);
-		}
+		this.closestNodes.push(hasCloserThanExist);
 	};
 	private findNodes = async (key: number) => {
 		const contacted = new Map<string, any>();
+		const failed = new Set<string>();
 		const shortlist = this.table.findNode(key, BIT_SIZE);
-
 		let currentClosestNode = shortlist[0];
-		await this.findNodeRecursiveSearch(contacted, shortlist, currentClosestNode);
+		// console.log(shortlist);
+		// this.contactNearestNodes();
+		// return Array.from(this.contacted.values());
+		const proc = async (promise: any, contact: any) => {
+			let hasCloserThanExist = false;
+
+			try {
+				const result = await promise;
+				contacted.set(contact.toString(), contact);
+
+				for (const closerNode of result) {
+					shortlist.push(closerNode);
+
+					const currentDistance = this.table.getBucketIndex(currentClosestNode);
+					const distance = this.table.getBucketIndex(closerNode);
+
+					if (distance < currentDistance) {
+						currentClosestNode = closerNode;
+						hasCloserThanExist = true;
+					}
+				}
+			} catch (e) {
+				console.error(e);
+				failed.add(contact.toString());
+			}
+
+			return hasCloserThanExist;
+		};
+
+		let iteration: number;
+		const communicate = async () => {
+			const promises: Array<Promise<boolean>> = [];
+
+			iteration = iteration == null ? 0 : iteration + 1;
+			const alphaContacts = shortlist.slice(iteration * 4, iteration * 4 + 4);
+
+			for (const contact of shortlist) {
+				if (contacted.has(contact.toString())) {
+					continue;
+				}
+				const promise = this.send(3000 + contact, "FIND_NODE", {});
+				promises.push(proc(promise, contact));
+			}
+
+			// console.log(promises);
+			if (!promises.length) {
+				console.log("No more contacts in shortlist");
+				return;
+			}
+
+			const results = await Promise.all(promises);
+			const isUpdatedClosest = results.some(Boolean);
+
+			if (isUpdatedClosest && contacted.size < BIT_SIZE) {
+				await communicate();
+			}
+		};
+
+		await communicate();
 
 		return Array.from(contacted.values());
+	};
+
+	private contactNearestNodes = () => {
+		this.closestNodes = [];
+		for (const contact of this.shortlist) {
+			if (this.contacted.has(contact.toString())) {
+				continue;
+			}
+			this.send(3000 + contact, "FIND_NODE", {});
+		}
+		if (!this.closestNodes.length) return;
+
+		const isUpdatedClosest = this.closestNodes.some(Boolean);
+		if (isUpdatedClosest && this.contacted.size < BIT_SIZE) {
+			this.contactNearestNodes();
+		}
 	};
 
 	private handleMessage = async (msg: Buffer, info: dgram.RemoteInfo) => {
 		try {
 			const message = JSON.parse(msg.toString());
 			const externalContact = message.fromNodeId;
-			await this.table.updateTables(externalContact);
+			await this.table.addBuckets(externalContact);
 
 			switch (message.type) {
 				case "REPLY": {
-					// console.log(message);
-					if (message?.data?.closestNodes) {
-						await this.table.updateTables(message.data.closestNodes);
+					const res = this.nodeResponses.get(message.resId);
 
-						this.emitter.emit(`response_${message.resId}`, {
-							closestNodes: message?.data?.closestNodes,
-							error: null,
-						});
+					if (res && message?.data?.closestNodes) {
+						await this.table.addBuckets(message.data.closestNodes);
+						this.nodeResponses.get(message.resId)?.resolve(message.data.closestNodes);
 					}
 					break;
 				}
@@ -362,9 +385,11 @@ class KademliaNode {
 	private async discoverNodes(): Promise<void> {
 		while (!this.stopDiscovery) {
 			const closeNodes = await this.findNodes(this.nodeId);
-			await this.table.updateTables(closeNodes);
 
+			await this.table.addBuckets(closeNodes);
 			closeNodes.forEach((n) => {
+				// this.table.updateTable(n);
+
 				if (!this.connections.has(n.toString())) {
 					this.connect(n + 4000, () => {
 						console.log(`Connection to ${n + 4000} established.`);

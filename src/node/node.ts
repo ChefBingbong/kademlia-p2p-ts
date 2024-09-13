@@ -1,11 +1,10 @@
 import * as dgram from "dgram";
 import { v4 } from "uuid";
-import { Server, WebSocket } from "ws";
+import { WebSocket } from "ws";
 import { App } from "../http/app";
 import RoutingTable from "../routingTable/routingTable";
 import WebSocketTransport from "../transports/tcp/wsTransport";
 import UDPTransport from "../transports/udp/udpTransport";
-import { ErrorWithCode, ProtocolError } from "../utils/errors";
 import { BIT_SIZE } from "./constants";
 // import { Neighbours } from "../contacts/contacts";
 // import { IContact } from "../contacts/types";
@@ -27,7 +26,6 @@ class KademliaNode {
 	public messages = new Map<string, string>();
 
 	public readonly connections: Map<string, WebSocket>;
-	private nodeResponses: Map<string, { resolve: Function; type: any }>;
 
 	public shortlist: number[] = [];
 	public currentClosestNode: number;
@@ -36,21 +34,21 @@ class KademliaNode {
 	private readonly emitter: P2PNetworkEventEmitter;
 	private udpTransport: UDPTransport;
 	private wsTransport: WebSocketTransport;
-	private server: Server;
 
 	on: (event: string, listener: (...args: any[]) => void) => void;
 	off: (event: string, listener: (...args: any[]) => void) => void;
-	private isInitialized: boolean = false;
 
 	constructor(id: number, port: number) {
 		this.nodeId = id;
 		this.port = port;
 		this.address = "127.0.0.1";
 		this.connections = new Map();
-		this.nodeResponses = new Map();
 
 		this.udpTransport = new UDPTransport(this.nodeId, this.port);
-		// this.wsTransport = new WebSocketTransport(this.nodeId, this.port, []);
+		this.wsTransport = new WebSocketTransport(this.nodeId, this.port + 1000, []);
+
+		this.api = new App(this, this.port);
+		this.table = new RoutingTable(this.nodeId, this);
 
 		this.emitter = new P2PNetworkEventEmitter(false);
 		this.emitter.on.bind(this.emitter);
@@ -59,12 +57,8 @@ class KademliaNode {
 		this.on = (e: string, l: Listener) => this.emitter.on(e, l);
 		this.off = (e: string, l: Listener) => this.emitter.on(e, l);
 
-		this.api = new App(this, this.port);
-		this.table = new RoutingTable(this.nodeId, this);
-		this.server = new WebSocket.Server({ port: this.port + 1000 });
-
 		this.api.listen();
-		this.initState();
+		this.listen();
 	}
 
 	public async start() {
@@ -72,141 +66,10 @@ class KademliaNode {
 		this.startNodeDiscovery();
 	}
 
-	// server init
-	private initState(): void {
-		this.emitter.on("_connect", (connectionId) => {
-			this._send(connectionId.connectionId, {
-				type: "handshake",
-				data: { nodeId: connectionId },
-			});
-		});
-
-		this.emitter.on("_disconnect", (connectionId) => {
-			this.emitter.emitDisconnect(connectionId, true);
-		});
-
-		this.emitter.on("_message", async ({ connectionId, message }) => {
-			const { type, data } = message;
-			if (type === "handshake") {
-				const { nodeId } = data;
-				this.emitter.emitConnect(nodeId, true);
-			}
-
-			if (type === "message") {
-				this.emitter.emitMessage(connectionId, data, true);
-			}
-		});
-
-		this.emitter.on("message", ({ nodeId, data: packet }) => {
-			if (this.seenMessages.has(packet.id) || packet.ttl < 1) return;
-
-			console.log(`node ${nodeId} is broadcasting to ${this.shortlist} ${this.nodeId}`);
-
-			const message = JSON.stringify({ id: packet.id, msg: packet.message.message });
-			this.messages.set(packet.id, message);
-
-			if (packet.type === "broadcast") {
-				if (packet.origin === this.port.toString()) {
-					this.emitter.emitBroadcast(packet.message, packet.origin);
-				} else {
-					this.broadcast(packet.message, packet.id, packet.origin);
-				}
-			}
-
-			if (packet.type === "direct") {
-				if (packet.destination === this.port) {
-					this.emitter.emitDirect(packet.message, packet.origin);
-				} else {
-					this.sendDirect(
-						packet.destination,
-						packet.message,
-						packet.id,
-						packet.origin,
-						packet.ttl - 1,
-					);
-				}
-			}
-		});
-
-		this.isInitialized = true;
-		this.listen();
-	}
-
-	public listen(): (cb?: any) => void {
-		if (!this.isInitialized)
-			throw new ErrorWithCode(
-				`Cannot listen before server is initialized`,
-				ProtocolError.PARAMETER_ERROR,
-			);
-
-		this.server.on("connection", (socket) => {
-			this.handleNewSocket(socket, this.nodeId);
-		});
-
-		this.handlePeerConnection();
-		this.handlePeerDisconnect();
-
-		this.handleBroadcastMessage();
-		this.handleDirectMessage();
-
+	public listen() {
 		this.udpTransport.onMessage(this.handleMessage);
-
-		this.connect(this.port + 1000, () => {
-			console.log(`Connection to ${this.port + 1000} established.`);
-		});
-
-		return (cb) => this.server.close(cb);
+		this.wsTransport.listen();
 	}
-
-	private handleNewSocket = (socket: WebSocket, nodeId: number, emitConnect = true) => {
-		const connectionId = nodeId.toString();
-		this.connections.set(connectionId, socket);
-
-		if (emitConnect) this.emitter.emitConnect(this.nodeId.toString(), false);
-
-		socket.on("message", (message: any) => {
-			const receivedData = JSON.parse(message);
-			this.emitter.emitMessage(connectionId, receivedData, false);
-		});
-
-		socket.on("close", () => {
-			this.connections.delete(connectionId);
-			this.emitter.emitDisconnect(connectionId, false);
-		});
-
-		socket.on("error", (err) => {
-			console.error(`Socket connection error: ${err.message}`);
-		});
-	};
-
-	public connect = (port: number, cb?: () => void) => {
-		const socket = new WebSocket(`ws://localhost:${port}`);
-
-		socket.on("error", (err) => {
-			console.error(`Socket connection error: ${err.message}`);
-		});
-
-		socket.on("open", async () => {
-			this.handleNewSocket(socket, port - 4000);
-			cb?.();
-		});
-
-		return () => socket.terminate();
-	};
-
-	private handlePeerConnection = (callback?: () => Promise<void>) => {
-		this.on("connect", async ({ nodeId }: { nodeId: { connectionId: string } }) => {
-			console.log(`Node ${this.nodeId} connected to: ${nodeId.connectionId}`);
-			// await callback();
-		});
-	};
-
-	private handlePeerDisconnect = (callback?: () => Promise<void>) => {
-		this.on("disconnect", async ({ nodeId }: { nodeId: string }) => {
-			console.log(`Node disconnected: ${nodeId}`);
-			// await callback();
-		});
-	};
 
 	public udpMessageResolver = (
 		params: any,
@@ -313,7 +176,6 @@ class KademliaNode {
 
 			switch (message.type) {
 				case "REPLY": {
-					// console.log(message);
 					if (message?.data?.closestNodes) {
 						await this.table.updateTables(message.data.closestNodes);
 
@@ -352,13 +214,14 @@ class KademliaNode {
 			this.s = true;
 
 			closeNodes.forEach((n) => {
-				if (!this.connections.has(n.toString())) {
-					this.connect(n + 4000, () => {
-						console.log(`Connection to ${n + 4000} established.`);
-					});
+				if (this.wsTransport.connections.has(n.toString())) {
+					this.wsTransport.handleNewConnection(
+						this.wsTransport.connections.get(n.toString()),
+						n,
+					);
 				}
 			});
-			await this.sleep(5000);
+			await this.sleep(25000);
 		}
 	}
 
@@ -393,7 +256,7 @@ class KademliaNode {
 			this.sendTCP(packet.destination, packet);
 			this.seenMessages.add(packet.id);
 		} else {
-			for (const $nodeId of this.connections.keys()) {
+			for (const $nodeId of this.wsTransport.connections.keys()) {
 				this.sendTCP($nodeId, packet);
 				this.seenMessages.add(packet.id);
 			}
@@ -401,40 +264,7 @@ class KademliaNode {
 	};
 
 	private sendTCP = (nodeId: string, data: any) => {
-		this._send(nodeId, { type: "message", data });
-	};
-
-	private _send = (connectionId: string, message: any) => {
-		const socket = this.connections.get(connectionId);
-
-		if (!socket)
-			throw new ErrorWithCode(
-				`Attempt to send data to connection that does not exist ${connectionId}`,
-				ProtocolError.INTERNAL_ERROR,
-			);
-		socket.send(JSON.stringify(message));
-	};
-
-	private handleBroadcastMessage = (callback?: () => Promise<void>) => {
-		this.on("broadcast", async ({ message }: { message: any }) => {
-			// TO-DO
-			await callback();
-		});
-	};
-
-	private handleDirectMessage = (callback?: () => Promise<void>) => {
-		this.on("direct", async ({ message }: { message: any }) => {
-			try {
-				// TO-DO
-				await callback();
-			} catch (error) {
-				console.log(error);
-				throw new ErrorWithCode(
-					`Error prcessing direct message for ${this.nodeId}`,
-					ProtocolError.INTERNAL_ERROR,
-				);
-			}
-		});
+		this.wsTransport.sendMessage(nodeId, { type: "message", data });
 	};
 
 	private sleep(ms: number): Promise<void> {

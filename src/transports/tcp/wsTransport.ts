@@ -122,7 +122,7 @@ class WebSocketTransport {
 		await callback?.();
 	};
 
-	private handleNewConnection = (socket: WebSocket, nodeId: number, callback?: () => void) => {
+	public handleNewConnection = (socket: WebSocket, nodeId: number, callback?: () => void) => {
 		const connectionId = nodeId.toString();
 
 		this.connections.set(connectionId, socket);
@@ -145,7 +145,7 @@ class WebSocketTransport {
 		return () => socket.terminate();
 	};
 
-	private sendMessage = (connectionId: string, message: any) => {
+	public sendMessage = (connectionId: string, message: any) => {
 		const socket = this.connections.get(connectionId);
 		if (!socket)
 			throw new ErrorWithCode(

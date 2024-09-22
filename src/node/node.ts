@@ -2,6 +2,7 @@ import * as dgram from "dgram";
 import { v4 } from "uuid";
 import { Server, WebSocket } from "ws";
 import { App } from "../http/app";
+import { Message } from "../message/message";
 import RoutingTable from "../routingTable/routingTable";
 import WebSocketTransport from "../transports/tcp/wsTransport";
 import UDPTransport from "../transports/udp/udpTransport";
@@ -409,6 +410,30 @@ class KademliaNode {
       }
     });
   };
+
+  protected createDirectMessage = (round: any, messageType: any[], currentRound: number): Message<any>[] => {
+    if (!round.isDirectMessageRound) return [];
+
+    return messageType.map((msg) => {
+      return Message.create<any>(this.selfId, msg?.to, this.session.protocolId, currentRound, msg, false);
+    });
+  };
+
+  protected createBroadcastMessage = (round: any, messageType: any, currentRound: number): Message<any> | undefined => {
+    if (!round.isBroadcastRound) return undefined;
+    return Message.create<any>(this.selfId, "", this.session.protocolId, currentRound, messageType, true);
+  };
+
+  protected storePeerDirectMessageResponse(newDirectMessage: Msg<any>, round: any, currentRound: number) {
+    if (
+      round.isDirectMessageRound &&
+      newDirectMessage &&
+      this.validator.canAccept(newDirectMessage, this.session, this.selfId)
+    ) {
+      this.directMessages.set(currentRound, newDirectMessage.Data);
+    }
+    return this.directMessages.getNonNullValuesLength(currentRound);
+  }
 
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));

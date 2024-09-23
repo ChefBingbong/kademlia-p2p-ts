@@ -3,4 +3,4 @@ implementation of the the Kademlia distributed hash table algorithm in typescrip
 ## kademlia Distributed Hash Table For Peer Discovery In P2P Networks
 This project implements a Kademlia Distributed Hash Table (DHT) for storing and retrieving key-value pairs across a decentralised network
 
-..More documentatuon coming soon as this project is still a worm in progress.
+..More documentatuon coming soon as this project is still a work in progress.

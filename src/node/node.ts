@@ -423,12 +423,8 @@ class KademliaNode {
   //   });
   // };
 
-  protected createUdpMessage = <T extends UDPDataInfo>(
-    recipient: MessageNode,
-    messageType: MessageType,
-    data: MessagePayload<T>,
-  ): Message<MessagePayload<T>> => {
-    const { address: toPort, nodeId: toNodeId } = recipient;
+  protected createUdpMessage = <T>(to: MessageNode, type: MessageType, data: MessagePayload<T>) => {
+    const { address: toPort, nodeId: toNodeId } = to;
     return Message.create<MessagePayload<T>>(
       this.port.toString(),
       toPort,
@@ -436,7 +432,7 @@ class KademliaNode {
       toNodeId,
       Transports.Udp,
       data,
-      messageType,
+      type,
     );
   };
 

@@ -20,6 +20,7 @@ class KademliaNode {
   public address: string;
   public port: number;
   public nodeId: number;
+  public readonly nodeContact: MessageNode & { ip: string }
   public table: RoutingTable;
   public s = false;
   public api: App;
@@ -48,6 +49,11 @@ class KademliaNode {
     this.nodeId = id;
     this.port = port;
     this.address = "127.0.0.1";
+    this.nodeContact = {
+      address: this.port.toString(),
+      nodeId: this.nodeId
+      ip: this.address
+    }
     this.connections = new Map();
     this.nodeResponses = new Map();
 
@@ -256,10 +262,8 @@ class KademliaNode {
         continue;
       }
 
-      const recipient = { address: (node + 3000).toString(), nodeId: node };
-
       const payload = this.buildMessagePayload<UDPDataInfo>(MessageType.PeerDiscovery, { resId: v4() }, this.nodeId);
-      const message = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.FindNode, payload);
+      const message = this.createUdpMessage<UDPDataInfo>(this.nodeContact, MessageType.FindNode, payload);
 
       const findNodeResponse = this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(
         message,

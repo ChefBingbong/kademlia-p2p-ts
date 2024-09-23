@@ -20,7 +20,7 @@ class KademliaNode {
   public address: string;
   public port: number;
   public nodeId: number;
-  public readonly nodeContact: MessageNode & { ip: string }
+  public readonly nodeContact: MessageNode & { ip: string };
   public table: RoutingTable;
   public s = false;
   public api: App;
@@ -51,9 +51,9 @@ class KademliaNode {
     this.address = "127.0.0.1";
     this.nodeContact = {
       address: this.port.toString(),
-      nodeId: this.nodeId
-      ip: this.address
-    }
+      nodeId: this.nodeId,
+      ip: this.address,
+    };
     this.connections = new Map();
     this.nodeResponses = new Map();
 
@@ -262,8 +262,10 @@ class KademliaNode {
         continue;
       }
 
+      const recipient = { address: (node + 3000).toString(), nodeId: node };
+
       const payload = this.buildMessagePayload<UDPDataInfo>(MessageType.PeerDiscovery, { resId: v4() }, this.nodeId);
-      const message = this.createUdpMessage<UDPDataInfo>(this.nodeContact, MessageType.FindNode, payload);
+      const message = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.FindNode, payload);
 
       const findNodeResponse = this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(
         message,
@@ -299,11 +301,11 @@ class KademliaNode {
   private handleMessage = async (msg: Buffer, info: dgram.RemoteInfo) => {
     try {
       const message = JSON.parse(msg.toString()) as Message<MessagePayload<UDPDataInfo>>;
-      const sender = message.from.nodeId;
-      await this.table.updateTables(sender);
+      const externalContact = message.from.nodeId;
+      await this.table.updateTables(externalContact);
 
       switch (message.type) {
-        case MessageType.Reply: {
+        case "REPLY": {
           const closestNodes = message.data.data.closestNodes;
           const resId = message.data.data.resId;
 
@@ -311,17 +313,23 @@ class KademliaNode {
           this.emitter.emit(`response_${resId}`, { closestNodes, error: null });
           break;
         }
-        case MessageType.FindNode: {
-          const closestNodes = this.table.findNode(sender);
+        case "FIND_NODE": {
+          const closestNodes = this.table.findNode(externalContact);
           const data = { resId: message.data.data.resId, closestNodes };
           const recipient = { address: message.from.address, nodeId: message.from.nodeId };
 
-          const msgPayload = this.buildMessagePayload<UDPDataInfo>(MessageType.PeerDiscovery, data, sender);
-          const payload = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.Reply, msgPayload);
-
+          const messagePayload = this.buildMessagePayload<UDPDataInfo>(
+            MessageType.PeerDiscovery,
+            data,
+            externalContact,
+          );
+          const payload = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.Reply, messagePayload);
           await this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(payload, this.udpMessageResolver);
           break;
         }
+
+        default:
+          return;
       }
     } catch (error) {
       console.error(error);

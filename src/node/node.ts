@@ -2,7 +2,8 @@ import * as dgram from "dgram";
 import { v4 } from "uuid";
 import { Server, WebSocket } from "ws";
 import { App } from "../http/app";
-import { Message } from "../message/message";
+import { Message, MessageNode, MessagePayload, UDPDataInfo } from "../message/message";
+import { MessageType, Transports } from "../message/types";
 import RoutingTable from "../routingTable/routingTable";
 import WebSocketTransport from "../transports/tcp/wsTransport";
 import UDPTransport from "../transports/udp/udpTransport";
@@ -204,6 +205,7 @@ class KademliaNode {
     const { type, responseId } = params;
     if (type === "REPLY") resolve();
     this.emitter.once(`response_${responseId}`, (data: any) => {
+      console.log(data);
       if (data.error) {
         return reject(data.error);
       }
@@ -253,11 +255,14 @@ class KademliaNode {
       if (contactedNodes.has(node.toString())) {
         continue;
       }
-      const findNodeResponse = this.udpTransport.sendMessage(
-        3000 + node,
-        "FIND_NODE",
-        {},
-        undefined,
+
+      const recipient = { address: (node + 3000).toString(), nodeId: node };
+
+      const payload = this.buildMessagePayload<UDPDataInfo>(MessageType.PeerDiscovery, { resId: v4() }, this.nodeId);
+      const message = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.FindNode, payload);
+
+      const findNodeResponse = this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(
+        message,
         this.udpMessageResolver,
       );
       findNodePromises.push(
@@ -289,32 +294,31 @@ class KademliaNode {
 
   private handleMessage = async (msg: Buffer, info: dgram.RemoteInfo) => {
     try {
-      const message = JSON.parse(msg.toString());
-      const externalContact = message.fromNodeId;
+      const message = JSON.parse(msg.toString()) as Message<MessagePayload<UDPDataInfo>>;
+      const externalContact = message.from.nodeId;
       await this.table.updateTables(externalContact);
 
       switch (message.type) {
         case "REPLY": {
-          // console.log(message);
-          if (message?.data?.closestNodes) {
-            await this.table.updateTables(message.data.closestNodes);
+          const closestNodes = message.data.data.closestNodes;
+          const resId = message.data.data.resId;
 
-            this.emitter.emit(`response_${message.resId}`, {
-              closestNodes: message?.data?.closestNodes,
-              error: null,
-            });
-          }
+          await this.table.updateTables(closestNodes);
+          this.emitter.emit(`response_${resId}`, { closestNodes, error: null });
           break;
         }
         case "FIND_NODE": {
           const closestNodes = this.table.findNode(externalContact);
-          await this.udpTransport.sendMessage(
-            info.port,
-            "REPLY",
-            { closestNodes },
-            message.resId,
-            this.udpMessageResolver,
+          const data = { resId: message.data.data.resId, closestNodes };
+          const recipient = { address: message.from.address, nodeId: message.from.nodeId };
+
+          const messagePayload = this.buildMessagePayload<UDPDataInfo>(
+            MessageType.PeerDiscovery,
+            data,
+            externalContact,
           );
+          const payload = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.Reply, messagePayload);
+          await this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(payload, this.udpMessageResolver);
           break;
         }
 
@@ -411,29 +415,53 @@ class KademliaNode {
     });
   };
 
-  protected createDirectMessage = (round: any, messageType: any[], currentRound: number): Message<any>[] => {
-    if (!round.isDirectMessageRound) return [];
+  // protected createDirectMessage = (round: any, messageType: any[], currentRound: number): Message<any>[] => {
+  //   if (!round.isDirectMessageRound) return [];
 
-    return messageType.map((msg) => {
-      return Message.create<any>(this.selfId, msg?.to, this.session.protocolId, currentRound, msg, false);
-    });
+  //   return messageType.map((msg) => {
+  //     return Message.create<any>(this.selfId, msg?.to, this.session.protocolId, currentRound, msg, false);
+  //   });
+  // };
+
+  protected createUdpMessage = <T extends UDPDataInfo>(
+    recipient: MessageNode,
+    messageType: MessageType,
+    data: MessagePayload<T>,
+  ): Message<MessagePayload<T>> => {
+    const { address: toPort, nodeId: toNodeId } = recipient;
+    return Message.create<MessagePayload<T>>(
+      this.port.toString(),
+      toPort,
+      this.nodeId,
+      toNodeId,
+      Transports.Udp,
+      data,
+      messageType,
+    );
   };
 
-  protected createBroadcastMessage = (round: any, messageType: any, currentRound: number): Message<any> | undefined => {
-    if (!round.isBroadcastRound) return undefined;
-    return Message.create<any>(this.selfId, "", this.session.protocolId, currentRound, messageType, true);
-  };
+  // protected storePeerDirectMessageResponse(newDirectMessage: Msg<any>, round: any, currentRound: number) {
+  //   if (
+  //     round.isDirectMessageRound &&
+  //     newDirectMessage &&
+  //     this.validator.canAccept(newDirectMessage, this.session, this.selfId)
+  //   ) {
+  //     this.directMessages.set(currentRound, newDirectMessage.Data);
+  //   }
+  //   return this.directMessages.getNonNullValuesLength(currentRound);
+  // }
 
-  protected storePeerDirectMessageResponse(newDirectMessage: Msg<any>, round: any, currentRound: number) {
-    if (
-      round.isDirectMessageRound &&
-      newDirectMessage &&
-      this.validator.canAccept(newDirectMessage, this.session, this.selfId)
-    ) {
-      this.directMessages.set(currentRound, newDirectMessage.Data);
-    }
-    return this.directMessages.getNonNullValuesLength(currentRound);
-  }
+  private buildMessagePayload = <T extends UDPDataInfo>(
+    type: MessageType,
+    data: T,
+    recipient: number,
+  ): MessagePayload<T> => {
+    return {
+      description: `${recipient} Recieved Peer discovery ${type} from ${this.nodeId}`,
+      type,
+      data,
+    };
+  };
 
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));

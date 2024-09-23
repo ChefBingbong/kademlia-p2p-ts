@@ -36,4 +36,6 @@ export enum MessageType {
   DirectmESSAGE = "DIRECT-MESSAGE",
   PeerDiscovery = "PEER-DISCOVER",
   Handshake = "HANDSHAKE",
+  FindNode = "FIND_NODE",
+  Reply = "REPLY",
 }

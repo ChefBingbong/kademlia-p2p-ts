@@ -1,6 +1,7 @@
 import dgram from "dgram";
 import { Message, MessagePayload, UDPDataInfo } from "../../message/message";
 import { timeoutReject } from "../../node/utils";
+import { extractError } from "../../utils/extractError";
 
 class UDPTransport {
   public readonly address: string;
@@ -53,8 +54,9 @@ class UDPTransport {
       const error = new Error("send timeout");
       const result = await Promise.race([nodeResponse, timeoutReject(error)]);
       return result;
-    } catch (e) {
-      console.log(e);
+    } catch (error) {
+      const parsedError = extractError(error);
+      console.log(parsedError);
       return [];
     }
   };

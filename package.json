@@ -6,6 +6,7 @@
   "packageManager": "pnpm@9.8.0",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "npx ts-node src/index.ts",
     "format:check": "biome format .",
     "format:write": "biome format . --write"
   },

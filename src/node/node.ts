@@ -11,6 +11,8 @@ import { ErrorWithCode, ProtocolError } from "../utils/errors";
 import { BIT_SIZE } from "./constants";
 // import { Neighbours } from "../contacts/contacts";
 // import { IContact } from "../contacts/types";
+import { DiscoveryScheduler, SchedulerInfo } from "../discoveryScheduler/discoveryScheduler";
+import { extractError } from "../utils/extractError";
 import { Listener, P2PNetworkEventEmitter } from "./eventEmitter";
 
 type NodeID = string; // Node ID as a string, typically represented as a hexadecimal string
@@ -35,11 +37,13 @@ class KademliaNode {
   public shortlist: number[] = [];
   public currentClosestNode: number;
   public closestNodes: boolean[] = [];
+  public discInitComplete: boolean
 
   private readonly emitter: P2PNetworkEventEmitter;
   private udpTransport: UDPTransport;
   private wsTransport: WebSocketTransport;
   private server: Server;
+  public discScheduler: DiscoveryScheduler;
 
   on: (event: string, listener: (...args: any[]) => void) => void;
   off: (event: string, listener: (...args: any[]) => void) => void;
@@ -49,6 +53,7 @@ class KademliaNode {
     this.nodeId = id;
     this.port = port;
     this.address = "127.0.0.1";
+    this.discInitComplete = false
     this.nodeContact = {
       address: this.port.toString(),
       nodeId: this.nodeId,
@@ -71,13 +76,19 @@ class KademliaNode {
     this.table = new RoutingTable(this.nodeId, this);
     this.server = new WebSocket.Server({ port: this.port + 1000 });
 
+    const jobId = "discScheduler"
+    const schedule = "*/10 * * * * *"
+    const timestamp = Date.now()
+    const info: SchedulerInfo = { start: timestamp, chnageTime: timestamp + 60000 }
+    this.discScheduler = new DiscoveryScheduler({ jobId, schedule, process, info });
+
     this.api.listen();
     this.initState();
   }
 
   public async start() {
     await this.table.updateTables(0);
-    this.startNodeDiscovery();
+    await this.initDiscScheduler();
   }
 
   // server init
@@ -157,6 +168,37 @@ class KademliaNode {
     return (cb) => this.server.close(cb);
   }
 
+  public async initDiscScheduler() {
+    this.discScheduler.createSchedule(this.discScheduler.schedule, async () => {
+      try {
+
+        const timestamp = Date.now()
+
+        if (timestamp > this.discScheduler.info.chnageTime && !this.discInitComplete) {
+          this.discScheduler.stopCronJob();
+          this.discScheduler.setSchedule("*/5 * * * *") 
+          this.discInitComplete = true
+
+          await this.initDiscScheduler();
+          console.log(`${this.port} initialized new cron for next lottery start time ${timestamp}`);
+        }
+
+        const closeNodes = await this.findNodes(this.nodeId);
+        await this.table.updateTables(closeNodes);
+
+        closeNodes.forEach((n) => {
+          if (!this.connections.has(n.toString())) {
+            this.connect(n + 4000, () => {
+              console.log(`Connection to ${n + 4000} established.`);
+            });
+          }
+        });
+      } catch (error) {
+        console.error(`message: ${extractError(error)}, fn: executeCronTask`);
+      }
+    });
+  }
+
   private handleNewSocket = (socket: WebSocket, nodeId: number, emitConnect = true) => {
     const connectionId = nodeId.toString();
     this.connections.set(connectionId, socket);
@@ -211,7 +253,6 @@ class KademliaNode {
     const { type, responseId } = params;
     if (type === "REPLY") resolve();
     this.emitter.once(`response_${responseId}`, (data: any) => {
-      console.log(data);
       if (data.error) {
         return reject(data.error);
       }
@@ -336,24 +377,6 @@ class KademliaNode {
     }
   };
 
-  private async discoverNodes(): Promise<void> {
-    while (!this.stopDiscovery) {
-      // this.s = true
-      const closeNodes = await this.findNodes(this.nodeId);
-      if (!this.s) await this.table.updateTables(closeNodes);
-      this.s = true;
-
-      closeNodes.forEach((n) => {
-        if (!this.connections.has(n.toString())) {
-          this.connect(n + 4000, () => {
-            console.log(`Connection to ${n + 4000} established.`);
-          });
-        }
-      });
-      await this.sleep(5000);
-    }
-  }
-
   public broadcast = (message: any, id: string = v4(), origin: string = this.port.toString(), ttl: number = 255) => {
     this.sendPacket({ id, ttl, type: "broadcast", message, origin });
   };
@@ -467,16 +490,6 @@ class KademliaNode {
 
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  startNodeDiscovery(): void {
-    this.stopDiscovery = false;
-    this.discoverNodes();
-  }
-
-  stopNodeDiscovery(): void {
-    this.stopDiscovery = true;
-    console.log("Stopping node discovery");
   }
 }
 

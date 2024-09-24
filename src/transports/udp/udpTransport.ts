@@ -20,19 +20,17 @@ class UDPTransport {
   }
 
   public setupListeners() {
-    return new Promise((res, rej) => {
+    return new Promise((resolve, reject) => {
       try {
         this.socket.bind(
           {
             port: this.port,
             address: this.address,
           },
-          () => {
-            res(null);
-          },
+          () => resolve(null)
         );
-      } catch (err) {
-        rej(err);
+      } catch (error) {
+        reject(error);
       }
     });
   }
@@ -40,9 +38,9 @@ class UDPTransport {
   public sendMessage = async <T extends MessagePayload<UDPDataInfo>>(
     message: Message<T>,
     callback?: (params: any, resolve: (value?: unknown) => void, reject: (reason?: any) => void) => void,
-  ) => {
+  ): Promise<number[] | undefined> => {
     try {
-      const nodeResponse = new Promise<any>((resolve, reject) => {
+      const nodeResponse = new Promise<number[]>((resolve, reject) => {
         const payload = JSON.stringify({ ...message });
         const recipient = Number(message.to.address);
 
@@ -52,12 +50,12 @@ class UDPTransport {
         });
       });
       const error = new Error("send timeout");
-      const result = await Promise.race([nodeResponse, timeoutReject(error)]);
+      const result = await Promise.race([nodeResponse, timeoutReject<number[]>(error)]);
       return result;
     } catch (error) {
       const parsedError = extractError(error);
       console.log(parsedError);
-      return [];
+      return [] as number[];
     }
   };
 

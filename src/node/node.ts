@@ -95,7 +95,7 @@ class KademliaNode {
             this.discInitComplete = true;
 
             await this.initDiscScheduler();
-            console.log(`${this.port} initialized new cron for next lottery start time ${timestamp}`);
+            console.log(`${this.port} initialized new cron for discovery interval ${timestamp}`);
           }
 
           const closeNodes = await this.findNodes(this.nodeId);

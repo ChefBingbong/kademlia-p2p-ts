@@ -176,13 +176,15 @@ class WebSocketTransport {
   };
 
   private sendPacket = (packet: any) => {
+    const message = JSON.stringify({ id: packet.id, msg: packet.message.message });
+
     if (packet.type === "direct") {
       this.send(packet.destination, packet);
-      // this.seenMessages.add(packet.id);
+      this.messages.DIRECT_MESSAGE.set(packet.id, message);
     } else {
       for (const $nodeId of this.neighbors.keys()) {
         this.send($nodeId, packet);
-        // this.seenMessages.add(packet.id);
+        this.messages.BROADCAST.set(packet.id, message);
       }
     }
   };

@@ -59,8 +59,7 @@ class UDPTransport {
       const result = await Promise.race([nodeResponse, timeoutReject<number[]>(error)]);
       return result;
     } catch (error) {
-      const parsedError = extractError(error);
-      console.log(parsedError);
+      console.error(`message: ${extractError(error)}, fn: sendMessage UDPTransport`);
       return [] as number[];
     }
   };

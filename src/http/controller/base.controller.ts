@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import { MessageType } from "../../message/types";
+import { MessageType, Transports } from "../../message/types";
 import KademliaNode from "../../node/node";
 
 class BaseController {
@@ -9,22 +9,21 @@ class BaseController {
     this.node = node;
   }
   public ping = async (req: Request, res: Response, next: NextFunction) => {
-    const payload = req.body;
-    // this.node.init();
     return res.json({ message: "success" });
   };
 
   public getNodeBuckets = async (req: Request, res: Response, next: NextFunction) => {
-    const buckets = this.node.table.getAllBuckets();
     return res.json({ message: this.node.table.getAllBuckets() });
   };
 
   public postDirectMessage = (req: Request, res: Response, next: NextFunction) => {
     try {
-      this.node.sendDirect(req.body.id, {
+      const payload = {
         type: "direct-message",
-        message: `recieved message from node ${this.node.port}`,
-      });
+        message: `recieved direct message from node ${this.node.port}`,
+        to: req.body.id,
+      };
+      this.node.sendTcpTransportMessage(MessageType.Braodcast, payload);
       res.send("success");
     } catch (error) {
       next(error);
@@ -33,11 +32,12 @@ class BaseController {
 
   public postBroadcast = (req: Request, res: Response, next: NextFunction) => {
     try {
-      this.node.broadcast({
+      const payload = {
         type: "broadcast-message",
-        message: `recieved message from node ${this.node.port}`,
-        // nodeId: config.p2pPort,
-      });
+        message: `recieved broadcast message from node ${this.node.port}`,
+        to: "",
+      };
+      this.node.sendTcpTransportMessage(MessageType.Braodcast, payload);
       res.send("success");
     } catch (error) {
       next(error);
@@ -46,7 +46,9 @@ class BaseController {
 
   public getNodeMessages = (req: Request, res: Response, next: NextFunction) => {
     try {
-      const messages = Array.from(this.node.messages.values());
+      const type = req.query.type as MessageType;
+      const messagesMap = this.node.getTransportMessages(Transports.Tcp, type);
+      const messages = Array.from(messagesMap.values());
       return res.json({ result: messages });
     } catch (error) {
       next(error);
@@ -56,7 +58,8 @@ class BaseController {
   public getNodeUDPMessages = (req: Request, res: Response, next: NextFunction) => {
     try {
       const type = req.query.type as MessageType;
-      const messages = Array.from(this.node.updMessages[type].values());
+      const messagesMap = this.node.getTransportMessages(Transports.Udp, type);
+      const messages = Array.from(messagesMap.values());
       return res.json({ result: messages });
     } catch (error) {
       next(error);

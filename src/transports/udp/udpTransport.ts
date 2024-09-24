@@ -1,5 +1,6 @@
 import dgram from "dgram";
 import { Message, MessagePayload, UDPDataInfo } from "../../message/message";
+import { MessageType } from "../../message/types";
 import { timeoutReject } from "../../node/utils";
 import { extractError } from "../../utils/extractError";
 
@@ -9,6 +10,11 @@ class UDPTransport {
   public readonly port: number;
 
   private socket: dgram.Socket;
+
+  public messages: Partial<{ [key in MessageType]: Map<string, Message<MessagePayload<UDPDataInfo>>> }> = {
+    [MessageType.FindNode]: new Map<string, Message<MessagePayload<UDPDataInfo>>>(),
+    [MessageType.Reply]: new Map<string, Message<MessagePayload<UDPDataInfo>>>(),
+  };
 
   constructor(nodeId: number, port: number) {
     this.nodeId = nodeId;
@@ -27,7 +33,7 @@ class UDPTransport {
             port: this.port,
             address: this.address,
           },
-          () => resolve(null)
+          () => resolve(null),
         );
       } catch (error) {
         reject(error);

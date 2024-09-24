@@ -1,6 +1,10 @@
 import * as dgram from "dgram";
 import { v4 } from "uuid";
 import { Server, WebSocket } from "ws";
+import { JobExecutor } from "../discoveryScheduler/discExecutor";
+// import { Neighbours } from "../contacts/contacts";
+// import { IContact } from "../contacts/types";
+import { DiscoveryScheduler, SchedulerInfo } from "../discoveryScheduler/discoveryScheduler";
 import { App } from "../http/app";
 import { Message, MessageNode, MessagePayload, UDPDataInfo } from "../message/message";
 import { MessageType, Transports } from "../message/types";
@@ -8,11 +12,8 @@ import RoutingTable from "../routingTable/routingTable";
 import WebSocketTransport from "../transports/tcp/wsTransport";
 import UDPTransport from "../transports/udp/udpTransport";
 import { ErrorWithCode, ProtocolError } from "../utils/errors";
-import { BIT_SIZE } from "./constants";
-// import { Neighbours } from "../contacts/contacts";
-// import { IContact } from "../contacts/types";
-import { DiscoveryScheduler, SchedulerInfo } from "../discoveryScheduler/discoveryScheduler";
 import { extractError } from "../utils/extractError";
+import { BIT_SIZE } from "./constants";
 import { Listener, P2PNetworkEventEmitter } from "./eventEmitter";
 
 type NodeID = string; // Node ID as a string, typically represented as a hexadecimal string
@@ -37,7 +38,7 @@ class KademliaNode {
   public shortlist: number[] = [];
   public currentClosestNode: number;
   public closestNodes: boolean[] = [];
-  public discInitComplete: boolean
+  public discInitComplete: boolean;
 
   private readonly emitter: P2PNetworkEventEmitter;
   private udpTransport: UDPTransport;
@@ -53,7 +54,7 @@ class KademliaNode {
     this.nodeId = id;
     this.port = port;
     this.address = "127.0.0.1";
-    this.discInitComplete = false
+    this.discInitComplete = false;
     this.nodeContact = {
       address: this.port.toString(),
       nodeId: this.nodeId,
@@ -76,10 +77,10 @@ class KademliaNode {
     this.table = new RoutingTable(this.nodeId, this);
     this.server = new WebSocket.Server({ port: this.port + 1000 });
 
-    const jobId = "discScheduler"
-    const schedule = "*/10 * * * * *"
-    const timestamp = Date.now()
-    const info: SchedulerInfo = { start: timestamp, chnageTime: timestamp + 60000 }
+    const jobId = "discScheduler";
+    const schedule = "*/10 * * * * *";
+    const timestamp = Date.now();
+    const info: SchedulerInfo = { start: timestamp, chnageTime: timestamp + 20000 };
     this.discScheduler = new DiscoveryScheduler({ jobId, schedule, process, info });
 
     this.api.listen();
@@ -171,27 +172,35 @@ class KademliaNode {
   public async initDiscScheduler() {
     this.discScheduler.createSchedule(this.discScheduler.schedule, async () => {
       try {
+        await JobExecutor.addToQueue(`${this.discScheduler.jobId}-${this.port}`, async () => {
+          const timestamp = Date.now();
 
-        const timestamp = Date.now()
+          if (timestamp > this.discScheduler.info.chnageTime && !this.discInitComplete) {
+            this.discScheduler.setSchedule("*/5 * * * *");
+            this.discScheduler.stopCronJob();
+            this.discInitComplete = true;
 
-        if (timestamp > this.discScheduler.info.chnageTime && !this.discInitComplete) {
-          this.discScheduler.stopCronJob();
-          this.discScheduler.setSchedule("*/5 * * * *") 
-          this.discInitComplete = true
-
-          await this.initDiscScheduler();
-          console.log(`${this.port} initialized new cron for next lottery start time ${timestamp}`);
-        }
-
-        const closeNodes = await this.findNodes(this.nodeId);
-        await this.table.updateTables(closeNodes);
-
-        closeNodes.forEach((n) => {
-          if (!this.connections.has(n.toString())) {
-            this.connect(n + 4000, () => {
-              console.log(`Connection to ${n + 4000} established.`);
-            });
+            await this.initDiscScheduler();
+            console.log(`${this.port} initialized new cron for next lottery start time ${timestamp}`);
           }
+
+          const closeNodes = await this.findNodes(this.nodeId);
+          await this.table.updateTables(closeNodes);
+
+          for (const closestNode of closeNodes) {
+            if (!this.connections.has(closestNode.toString())) {
+              this.connect(closestNode + 4000, () => {
+                console.log(`Connection to ${closestNode + 4000} established.`);
+              });
+            }
+          }
+          closeNodes.forEach((n: number) => {
+            if (!this.connections.has(n.toString())) {
+              this.connect(n + 4000, () => {
+                console.log(`Connection to ${n + 4000} established.`);
+              });
+            }
+          });
         });
       } catch (error) {
         console.error(`message: ${extractError(error)}, fn: executeCronTask`);

@@ -46,6 +46,11 @@ class KademliaNode {
   private server: Server;
   public discScheduler: DiscoveryScheduler;
 
+  public updMessages: Partial<{ [key in MessageType]: Map<string, Message<MessagePayload<UDPDataInfo>>> }> = {
+    [MessageType.FindNode]: new Map<string, Message<MessagePayload<UDPDataInfo>>>(),
+    [MessageType.Reply]: new Map<string, Message<MessagePayload<UDPDataInfo>>>(),
+  };
+
   on: (event: string, listener: (...args: any[]) => void) => void;
   off: (event: string, listener: (...args: any[]) => void) => void;
   private isInitialized: boolean = false;
@@ -80,7 +85,7 @@ class KademliaNode {
     const jobId = "discScheduler";
     const schedule = "*/10 * * * * *";
     const timestamp = Date.now();
-    const info: SchedulerInfo = { start: timestamp, chnageTime: timestamp + 20000 };
+    const info: SchedulerInfo = { start: timestamp, chnageTime: timestamp + 40000 };
     this.discScheduler = new DiscoveryScheduler({ jobId, schedule, process, info });
 
     this.api.listen();
@@ -172,6 +177,7 @@ class KademliaNode {
   public async initDiscScheduler() {
     this.discScheduler.createSchedule(this.discScheduler.schedule, async () => {
       try {
+        console.log("hitting", this.port);
         await JobExecutor.addToQueue(`${this.discScheduler.jobId}-${this.port}`, async () => {
           const timestamp = Date.now();
 
@@ -194,13 +200,6 @@ class KademliaNode {
               });
             }
           }
-          closeNodes.forEach((n: number) => {
-            if (!this.connections.has(n.toString())) {
-              this.connect(n + 4000, () => {
-                console.log(`Connection to ${n + 4000} established.`);
-              });
-            }
-          });
         });
       } catch (error) {
         console.error(`message: ${extractError(error)}, fn: executeCronTask`);
@@ -356,6 +355,8 @@ class KademliaNode {
 
       switch (message.type) {
         case "REPLY": {
+          this.updMessages.REPLY.set(message.data.data.resId, message);
+
           const closestNodes = message.data.data.closestNodes;
           const resId = message.data.data.resId;
 
@@ -368,6 +369,7 @@ class KademliaNode {
           const data = { resId: message.data.data.resId, closestNodes };
           const recipient = { address: message.from.address, nodeId: message.from.nodeId };
 
+          this.updMessages.FIND_NODE.set(message.data.data.resId, message);
           const messagePayload = this.buildMessagePayload<UDPDataInfo>(
             MessageType.PeerDiscovery,
             data,

@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from "express";
+import { MessageType } from "../../message/types";
 import KademliaNode from "../../node/node";
 
 class BaseController {
@@ -46,6 +47,16 @@ class BaseController {
   public getNodeMessages = (req: Request, res: Response, next: NextFunction) => {
     try {
       const messages = Array.from(this.node.messages.values());
+      return res.json({ result: messages });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public getNodeUDPMessages = (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const type = req.query.type as MessageType;
+      const messages = Array.from(this.node.updMessages[type].values());
       return res.json({ result: messages });
     } catch (error) {
       next(error);

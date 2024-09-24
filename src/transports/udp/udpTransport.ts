@@ -56,8 +56,7 @@ class UDPTransport {
         });
       });
       const error = new Error("send timeout");
-      const result = await Promise.race([nodeResponse, timeoutReject<number[]>(error)]);
-      return result;
+      return Promise.race([nodeResponse, timeoutReject<number[]>(error)]);
     } catch (error) {
       console.error(`message: ${extractError(error)}, fn: sendMessage UDPTransport`);
       return [] as number[];

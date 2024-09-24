@@ -38,4 +38,7 @@ export enum MessageType {
   Handshake = "HANDSHAKE",
   FindNode = "FIND_NODE",
   Reply = "REPLY",
+  FindValue = "FIND_VALUE",
+  Store = "STORE",
+  Ping = "PING",
 }

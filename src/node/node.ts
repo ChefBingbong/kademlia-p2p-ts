@@ -212,7 +212,7 @@ class KademliaNode {
       await this.table.updateTables(externalContact);
 
       switch (message.type) {
-        case "REPLY": {
+        case MessageType.Reply: {
           this.udpTransport.messages.REPLY.set(message.data.data.resId, message);
 
           const closestNodes = message.data.data.closestNodes;
@@ -222,7 +222,7 @@ class KademliaNode {
           this.emitter.emit(`response_${resId}`, { closestNodes, error: null });
           break;
         }
-        case "FIND_NODE": {
+        case MessageType.FindNode: {
           const closestNodes = this.table.findNode(externalContact);
           const data = { resId: message.data.data.resId, closestNodes };
           const recipient = { address: message.from.address, nodeId: message.from.nodeId };
@@ -237,6 +237,12 @@ class KademliaNode {
           await this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(payload, this.udpMessageResolver);
           break;
         }
+        case MessageType.FindValue:
+          break; // TO-DO
+        case MessageType.Store:
+          break; // TO-DO
+        case MessageType.Ping:
+          break; // TO-DO
 
         default:
           return;

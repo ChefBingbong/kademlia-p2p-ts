@@ -264,13 +264,13 @@ class KademliaNode {
   public sendTcpTransportMessage = <T extends BroadcastData | DirectData>(type: MessageType, payload: T) => {
     switch (type) {
       case MessageType.DirectMessage: {
-        const packet = this.buildPacket(type, payload);
-        this.wsTransport.sendMessage(packet);
+        const packet = this.buildPacket<T>(type, payload);
+        this.wsTransport.sendMessage<T>(packet);
         break;
       }
       case MessageType.Braodcast: {
-        const packet = this.buildPacket(type, payload);
-        this.wsTransport.sendMessage(packet);
+        const packet = this.buildPacket<T>(type, payload);
+        this.wsTransport.sendMessage<T>(packet);
         break;
       }
       default:

@@ -42,3 +42,10 @@ export enum MessageType {
   Store = "STORE",
   Ping = "PING",
 }
+
+export enum PacketType {
+  Broadcast = "broadcast",
+  Direct = "direct",
+  HandShake = "handshake",
+  Message = "message",
+}

@@ -5,9 +5,10 @@ import { JobExecutor } from "../discoveryScheduler/discExecutor";
 import { DiscoveryScheduler, SchedulerInfo } from "../discoveryScheduler/discoveryScheduler";
 import { App } from "../http/app";
 import { Message, MessageNode, MessagePayload, UDPDataInfo } from "../message/message";
-import { MessageType, Transports } from "../message/types";
+import { MessageType, PacketType, Transports } from "../message/types";
 import RoutingTable from "../routingTable/routingTable";
-import WebSocketTransport, { TCPMessage } from "../transports/tcp/wsTransport";
+import WebSocketTransport from "../transports/tcp/wsTransport";
+import { BroadcastData, DirectData, TcpPacket } from "../transports/types";
 import UDPTransport from "../transports/udp/udpTransport";
 import { extractError } from "../utils/extractError";
 import { BIT_SIZE } from "./constants";
@@ -54,9 +55,9 @@ class KademliaNode {
     this.emitter.off.bind(this.emitter);
 
     const jobId = "discScheduler";
-    const schedule = "*/10 * * * * *";
+    const schedule = "*/8 * * * * *";
     const timestamp = Date.now();
-    const info: SchedulerInfo = { start: timestamp, chnageTime: timestamp + 40000 };
+    const info: SchedulerInfo = { start: timestamp, chnageTime: timestamp + 64000 };
 
     this.discScheduler = new DiscoveryScheduler({ jobId, schedule, process, info });
     this.api = new App(this, this.port - 1000);
@@ -85,7 +86,6 @@ class KademliaNode {
   public async initDiscScheduler() {
     this.discScheduler.createSchedule(this.discScheduler.schedule, async () => {
       try {
-        console.log("hitting", this.port);
         await JobExecutor.addToQueue(`${this.discScheduler.jobId}-${this.port}`, async () => {
           const timestamp = Date.now();
 
@@ -168,9 +168,7 @@ class KademliaNode {
       if (contactedNodes.has(node.toString())) {
         continue;
       }
-
       const recipient = { address: (node + 3000).toString(), nodeId: node };
-
       const payload = this.buildMessagePayload<UDPDataInfo>(MessageType.PeerDiscovery, { resId: v4() }, this.nodeId);
       const message = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.FindNode, payload);
 
@@ -263,14 +261,18 @@ class KademliaNode {
     }
   };
 
-  public sendTcpTransportMessage = (type: MessageType, payload: TCPMessage) => {
+  public sendTcpTransportMessage = <T extends BroadcastData | DirectData>(type: MessageType, payload: T) => {
     switch (type) {
-      case MessageType.DirectMessage:
-        this.wsTransport.sendDirect(payload.to, payload);
+      case MessageType.DirectMessage: {
+        const packet = this.buildPacket<T>(type, payload);
+        this.wsTransport.sendMessage<T>(packet);
         break;
-      case MessageType.Braodcast:
-        this.wsTransport.broadcast(payload);
+      }
+      case MessageType.Braodcast: {
+        const packet = this.buildPacket<T>(type, payload);
+        this.wsTransport.sendMessage<T>(packet);
         break;
+      }
       default:
         console.log("Message type does not exist");
     }
@@ -306,6 +308,21 @@ class KademliaNode {
       description: `${recipient} Recieved Peer discovery ${type} from ${this.nodeId}`,
       type,
       data,
+    };
+  };
+
+  private buildPacket = <T extends BroadcastData | DirectData>(
+    type: MessageType,
+    message: any,
+    ttl: number = 255,
+  ): TcpPacket<T> => {
+    return {
+      id: v4(),
+      ttl: ttl,
+      type: type === MessageType.Braodcast ? PacketType.Broadcast : PacketType.Direct,
+      message,
+      destination: message.from,
+      origin: this.wsTransport.port.toString(),
     };
   };
 }

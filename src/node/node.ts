@@ -203,6 +203,34 @@ class KademliaNode {
     return Array.from(contacted.values());
   };
 
+  public getTransportMessages = (transport: Transports, type: MessageType) => {
+    switch (transport) {
+      case Transports.Tcp:
+        return this.wsTransport.messages[type];
+      case Transports.Udp:
+        return this.udpTransport.messages[type];
+      default:
+        console.log("No messages for this transport or type");
+    }
+  };
+
+  public sendTcpTransportMessage = <T extends BroadcastData | DirectData>(type: MessageType, payload: T) => {
+    switch (type) {
+      case MessageType.DirectMessage: {
+        const packet = this.buildPacket<T>(type, payload);
+        this.wsTransport.sendMessage<T>(packet);
+        break;
+      }
+      case MessageType.Braodcast: {
+        const packet = this.buildPacket<T>(type, payload);
+        this.wsTransport.sendMessage<T>(packet);
+        break;
+      }
+      default:
+        console.log("Message type does not exist");
+    }
+  };
+
   private handleMessage = async (msg: Buffer, info: dgram.RemoteInfo) => {
     try {
       const message = JSON.parse(msg.toString()) as Message<MessagePayload<UDPDataInfo>>;
@@ -247,34 +275,6 @@ class KademliaNode {
       }
     } catch (error) {
       console.error(error);
-    }
-  };
-
-  public getTransportMessages = (transport: Transports, type: MessageType) => {
-    switch (transport) {
-      case Transports.Tcp:
-        return this.wsTransport.messages[type];
-      case Transports.Udp:
-        return this.udpTransport.messages[type];
-      default:
-        console.log("No messages for this transport or type");
-    }
-  };
-
-  public sendTcpTransportMessage = <T extends BroadcastData | DirectData>(type: MessageType, payload: T) => {
-    switch (type) {
-      case MessageType.DirectMessage: {
-        const packet = this.buildPacket<T>(type, payload);
-        this.wsTransport.sendMessage<T>(packet);
-        break;
-      }
-      case MessageType.Braodcast: {
-        const packet = this.buildPacket<T>(type, payload);
-        this.wsTransport.sendMessage<T>(packet);
-        break;
-      }
-      default:
-        console.log("Message type does not exist");
     }
   };
 

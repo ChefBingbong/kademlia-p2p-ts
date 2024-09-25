@@ -115,7 +115,6 @@ class WebSocketTransport {
 
   public connect = (port: number, cb?: () => void) => {
     const socket = new WebSocket(`ws://localhost:${port}`);
-
     socket.on("error", (err) => {
       console.error(`Socket connection error: ${err.message}`);
     });

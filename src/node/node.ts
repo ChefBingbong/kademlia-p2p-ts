@@ -168,9 +168,7 @@ class KademliaNode {
       if (contactedNodes.has(node.toString())) {
         continue;
       }
-
       const recipient = { address: (node + 3000).toString(), nodeId: node };
-
       const payload = this.buildMessagePayload<UDPDataInfo>(MessageType.PeerDiscovery, { resId: v4() }, this.nodeId);
       const message = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.FindNode, payload);
 

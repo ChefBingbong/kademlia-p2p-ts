@@ -2,6 +2,7 @@ import { Server, WebSocket } from "ws";
 import { MessageType, PacketType } from "../../message/types";
 import { Listener, P2PNetworkEventEmitter } from "../../node/eventEmitter";
 import { ErrorWithCode, ProtocolError } from "../../utils/errors";
+import AbstractTransport from "../abstractTransport/abstractTransport";
 import { BroadcastData, DirectData, HandShake, TcpData, TcpPacket } from "../types";
 
 export type TCPMessage = { type: string; message: string; to: string };
@@ -10,11 +11,8 @@ type OnMessagePayload<T extends BroadcastData | DirectData> = {
   message: { type: "message" | "handshake"; data: HandShake | TcpPacket<T> };
 };
 
-class WebSocketTransport {
+class WebSocketTransport extends AbstractTransport<Server> {
   public readonly connections: Map<string, WebSocket>;
-  public readonly nodeId: number;
-  public readonly port: number;
-  public readonly ports: number[];
   public readonly neighbors: Map<string, string>;
 
   public on: (event: string, listener: (...args: any[]) => void) => void;
@@ -22,7 +20,6 @@ class WebSocketTransport {
 
   private readonly emitter: P2PNetworkEventEmitter;
   private isInitialized: boolean = false;
-  public server: Server;
 
   public messages: Partial<{ [key in MessageType]: Map<string, any> }> = {
     [MessageType.Braodcast]: new Map<string, any>(),
@@ -30,14 +27,10 @@ class WebSocketTransport {
   };
 
   constructor(nodeId: number, port: number, ports: number[]) {
+    super(nodeId, port, new WebSocket.Server({ port }));
     this.connections = new Map();
     this.neighbors = new Map();
 
-    this.nodeId = nodeId;
-    this.port = port;
-    this.ports = ports;
-
-    this.server = new WebSocket.Server({ port });
     this.emitter = new P2PNetworkEventEmitter(false);
     this.emitter.on.bind(this.emitter);
     this.emitter.off.bind(this.emitter);

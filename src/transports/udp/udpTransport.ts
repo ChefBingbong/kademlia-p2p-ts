@@ -3,32 +3,23 @@ import { Message, MessagePayload, UDPDataInfo } from "../../message/message";
 import { MessageType } from "../../message/types";
 import { timeoutReject } from "../../node/utils";
 import { extractError } from "../../utils/extractError";
+import AbstractTransport from "../abstractTransport/abstractTransport";
 
-class UDPTransport {
-  public readonly address: string;
-  public readonly nodeId: number;
-  public readonly port: number;
-
-  private socket: dgram.Socket;
-
+class UDPTransport extends AbstractTransport<dgram.Socket> {
   public messages: Partial<{ [key in MessageType]: Map<string, Message<MessagePayload<UDPDataInfo>>> }> = {
     [MessageType.FindNode]: new Map<string, Message<MessagePayload<UDPDataInfo>>>(),
     [MessageType.Reply]: new Map<string, Message<MessagePayload<UDPDataInfo>>>(),
   };
 
   constructor(nodeId: number, port: number) {
-    this.nodeId = nodeId;
-    this.port = port;
-    this.address = "127.0.0.1";
-
-    this.socket = dgram.createSocket("udp4");
+    super(nodeId, port, dgram.createSocket("udp4"));
     this.setupListeners();
   }
 
   public setupListeners() {
     return new Promise((resolve, reject) => {
       try {
-        this.socket.bind(
+        this.server.bind(
           {
             port: this.port,
             address: this.address,
@@ -50,7 +41,7 @@ class UDPTransport {
         const payload = JSON.stringify({ ...message });
         const recipient = Number(message.to.address);
 
-        this.socket.send(payload, recipient, this.address, () => {
+        this.server.send(payload, recipient, this.address, () => {
           const args = { type: message.type, data: message.data, responseId: message.data.data.resId };
           callback(args, resolve, reject);
         });
@@ -64,14 +55,14 @@ class UDPTransport {
   };
 
   public onMessage(callback: (msg: Buffer, info: dgram.RemoteInfo) => Promise<void>) {
-    this.socket.on("message", (message, remoteInfo) => {
+    this.server.on("message", (message, remoteInfo) => {
       callback(message, remoteInfo);
     });
   }
 
   public close() {
-    this.socket.removeAllListeners("message");
-    this.socket.close();
+    this.server.removeAllListeners("message");
+    this.server.close();
   }
 }
 

@@ -31,6 +31,9 @@
       "performance": {
         "noAccumulatingSpread": "off"
       },
+      "correctness": {
+        "noSwitchDeclarations": "off"
+      },
       "style": {
         "noUselessElse": "warn",
         "useNumberNamespace": "off",

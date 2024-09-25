@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { MessageType, Transports } from "../../message/types";
 import KademliaNode from "../../node/node";
+import { BroadcastData, DirectData } from "../../transports/types";
 
 class BaseController {
   public node: KademliaNode;
@@ -18,10 +19,10 @@ class BaseController {
 
   public postDirectMessage = (req: Request, res: Response, next: NextFunction) => {
     try {
-      const payload = {
+      const payload: DirectData = {
         type: "direct-message",
         message: `recieved direct message from node ${this.node.port}`,
-        to: req.body.id,
+        to: Number(req.body.id),
       };
       this.node.sendTcpTransportMessage(MessageType.Braodcast, payload);
       res.send("success");
@@ -32,10 +33,10 @@ class BaseController {
 
   public postBroadcast = (req: Request, res: Response, next: NextFunction) => {
     try {
-      const payload = {
+      const payload: BroadcastData = {
         type: "broadcast-message",
         message: `recieved broadcast message from node ${this.node.port}`,
-        to: "",
+        peers: [],
       };
       this.node.sendTcpTransportMessage(MessageType.Braodcast, payload);
       res.send("success");

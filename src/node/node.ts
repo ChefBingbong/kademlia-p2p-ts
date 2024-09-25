@@ -7,7 +7,8 @@ import { App } from "../http/app";
 import { Message, MessageNode, MessagePayload, UDPDataInfo } from "../message/message";
 import { MessageType, Transports } from "../message/types";
 import RoutingTable from "../routingTable/routingTable";
-import WebSocketTransport, { TCPMessage } from "../transports/tcp/wsTransport";
+import WebSocketTransport from "../transports/tcp/wsTransport";
+import { BroadcastData, DirectData, TcpPacket } from "../transports/types";
 import UDPTransport from "../transports/udp/udpTransport";
 import { extractError } from "../utils/extractError";
 import { BIT_SIZE } from "./constants";
@@ -85,7 +86,6 @@ class KademliaNode {
   public async initDiscScheduler() {
     this.discScheduler.createSchedule(this.discScheduler.schedule, async () => {
       try {
-        console.log("hitting", this.port);
         await JobExecutor.addToQueue(`${this.discScheduler.jobId}-${this.port}`, async () => {
           const timestamp = Date.now();
 
@@ -263,14 +263,18 @@ class KademliaNode {
     }
   };
 
-  public sendTcpTransportMessage = (type: MessageType, payload: TCPMessage) => {
+  public sendTcpTransportMessage = <T extends BroadcastData | DirectData>(type: MessageType, payload: T) => {
     switch (type) {
-      case MessageType.DirectMessage:
-        this.wsTransport.sendDirect(payload.to, payload);
+      case MessageType.DirectMessage: {
+        const packet = this.buildPacket(type, payload);
+        this.wsTransport.sendMessage(packet);
         break;
-      case MessageType.Braodcast:
-        this.wsTransport.broadcast(payload);
+      }
+      case MessageType.Braodcast: {
+        const packet = this.buildPacket(type, payload);
+        this.wsTransport.sendMessage(packet);
         break;
+      }
       default:
         console.log("Message type does not exist");
     }
@@ -306,6 +310,22 @@ class KademliaNode {
       description: `${recipient} Recieved Peer discovery ${type} from ${this.nodeId}`,
       type,
       data,
+    };
+  };
+
+  private buildPacket = <T extends BroadcastData | DirectData>(
+    type: MessageType,
+    message: any,
+    ttl: number = 255,
+  ): TcpPacket<T> => {
+    const packetType = type === MessageType.Braodcast ? "broadcast" : "direct";
+    return {
+      id: v4(),
+      ttl: ttl,
+      type: packetType,
+      message,
+      destination: message.from,
+      origin: this.wsTransport.port.toString(),
     };
   };
 }

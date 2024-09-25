@@ -55,9 +55,9 @@ class KademliaNode {
     this.emitter.off.bind(this.emitter);
 
     const jobId = "discScheduler";
-    const schedule = "*/10 * * * * *";
+    const schedule = "*/8 * * * * *";
     const timestamp = Date.now();
-    const info: SchedulerInfo = { start: timestamp, chnageTime: timestamp + 40000 };
+    const info: SchedulerInfo = { start: timestamp, chnageTime: timestamp + 64000 };
 
     this.discScheduler = new DiscoveryScheduler({ jobId, schedule, process, info });
     this.api = new App(this, this.port - 1000);

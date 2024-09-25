@@ -1,5 +1,5 @@
 import { Server, WebSocket } from "ws";
-import { MessageType } from "../../message/types";
+import { MessageType, PacketType } from "../../message/types";
 import { Listener, P2PNetworkEventEmitter } from "../../node/eventEmitter";
 import { ErrorWithCode, ProtocolError } from "../../utils/errors";
 import { BroadcastData, DirectData, HandShake, TcpData, TcpPacket } from "../types";
@@ -50,7 +50,7 @@ class WebSocketTransport {
   public setupListeners = (): void => {
     this.on("_connect", ({ connectionId }: { connectionId: string }) => {
       const payload: HandShake = { nodeId: this.nodeId };
-      this.send(connectionId, "handshake", payload);
+      this.send(connectionId, PacketType.HandShake, payload);
     });
 
     this.on("_disconnect", (connectionId) => {
@@ -60,12 +60,12 @@ class WebSocketTransport {
 
     this.on("_message", async <T extends BroadcastData | DirectData>(pkt: OnMessagePayload<T>) => {
       switch (pkt.message.type) {
-        case "handshake":
+        case PacketType.HandShake:
           const { nodeId } = pkt.message.data as HandShake;
           this.neighbors.set(pkt.connectionId, pkt.connectionId);
           this.emitter.emitConnect(nodeId.toString(), true);
           break;
-        case "message": {
+        case PacketType.Message: {
           const data = pkt.message.data as TcpPacket<T>;
           this.emitter.emitMessage(pkt.connectionId, data, true);
           break;
@@ -76,13 +76,13 @@ class WebSocketTransport {
     this.emitter.on("message", <T extends BroadcastData | DirectData>({ data: packet }: { data: TcpPacket<T> }) => {
       if (this.messages.BROADCAST.has(packet.id) || packet.ttl < 1) return;
 
-      if (packet.type === "broadcast") {
+      if (packet.type === PacketType.Broadcast) {
         this.messages.BROADCAST.set(packet.id, packet.message);
         this.sendMessage<T>(packet);
         this.emitter.emitBroadcast(packet.message, packet.origin);
       }
 
-      if (packet.type === "direct") {
+      if (packet.type === PacketType.Direct) {
         if (packet.destination === this.port.toString()) {
           this.emitter.emitDirect(packet.message, packet.origin);
         } else {
@@ -153,14 +153,15 @@ class WebSocketTransport {
 
   public sendMessage = <T extends BroadcastData | DirectData>(packet: TcpPacket<T>) => {
     const message = JSON.stringify({ id: packet.id, msg: packet.message.message });
+
     switch (packet.type) {
-      case "direct":
-        this.send(packet.destination, "message", packet);
+      case PacketType.Direct:
+        this.send(packet.destination, PacketType.Message, packet);
         this.messages.DIRECT_MESSAGE.set(packet.id, message);
         break;
-      case "broadcast": {
+      case PacketType.Broadcast: {
         for (const $nodeId of this.neighbors.keys()) {
-          this.send($nodeId, "message", packet);
+          this.send($nodeId, PacketType.Message, packet);
           this.messages.BROADCAST.set(packet.id, message);
         }
       }
@@ -177,7 +178,6 @@ class WebSocketTransport {
         ProtocolError.INTERNAL_ERROR,
       );
 
-    console.log(data);
     socket.send(JSON.stringify({ type, data }));
   };
 

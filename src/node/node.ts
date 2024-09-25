@@ -5,7 +5,7 @@ import { JobExecutor } from "../discoveryScheduler/discExecutor";
 import { DiscoveryScheduler, SchedulerInfo } from "../discoveryScheduler/discoveryScheduler";
 import { App } from "../http/app";
 import { Message, MessageNode, MessagePayload, UDPDataInfo } from "../message/message";
-import { MessageType, Transports } from "../message/types";
+import { MessageType, PacketType, Transports } from "../message/types";
 import RoutingTable from "../routingTable/routingTable";
 import WebSocketTransport from "../transports/tcp/wsTransport";
 import { BroadcastData, DirectData, TcpPacket } from "../transports/types";
@@ -316,11 +316,10 @@ class KademliaNode {
     message: any,
     ttl: number = 255,
   ): TcpPacket<T> => {
-    const packetType = type === MessageType.Braodcast ? "broadcast" : "direct";
     return {
       id: v4(),
       ttl: ttl,
-      type: packetType,
+      type: type === MessageType.Braodcast ? PacketType.Broadcast : PacketType.Direct,
       message,
       destination: message.from,
       origin: this.wsTransport.port.toString(),

@@ -2,7 +2,7 @@ import { Server, WebSocket } from "ws";
 import { MessageType, PacketType } from "../../message/types";
 import { Listener, P2PNetworkEventEmitter } from "../../node/eventEmitter";
 import { ErrorWithCode, ProtocolError } from "../../utils/errors";
-import AbstractTransport from "../abstractTransport/abstractTransport";
+import AbstractTransport, { BaseMessageType } from "../abstractTransport/abstractTransport";
 import { BroadcastData, DirectData, HandShake, TcpData, TcpPacket } from "../types";
 
 export type TCPMessage = { type: string; message: string; to: string };
@@ -11,7 +11,7 @@ type OnMessagePayload<T extends BroadcastData | DirectData> = {
   message: { type: "message" | "handshake"; data: HandShake | TcpPacket<T> };
 };
 
-class WebSocketTransport extends AbstractTransport<Server> {
+class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
   public readonly connections: Map<string, WebSocket>;
   public readonly neighbors: Map<string, string>;
 
@@ -21,12 +21,7 @@ class WebSocketTransport extends AbstractTransport<Server> {
   private readonly emitter: P2PNetworkEventEmitter;
   private isInitialized: boolean = false;
 
-  public messages: Partial<{ [key in MessageType]: Map<string, any> }> = {
-    [MessageType.Braodcast]: new Map<string, any>(),
-    [MessageType.DirectMessage]: new Map<string, any>(),
-  };
-
-  constructor(nodeId: number, port: number, ports: number[]) {
+  constructor(nodeId: number, port: number) {
     super(nodeId, port, new WebSocket.Server({ port }));
     this.connections = new Map();
     this.neighbors = new Map();
@@ -41,6 +36,11 @@ class WebSocketTransport extends AbstractTransport<Server> {
   }
 
   public setupListeners = (): void => {
+    this.messages = {
+      [MessageType.Braodcast]: new Map<string, any>(),
+      [MessageType.DirectMessage]: new Map<string, any>(),
+    };
+
     this.on("_connect", ({ connectionId }: { connectionId: string }) => {
       const payload: HandShake = { nodeId: this.nodeId };
       this.send(connectionId, PacketType.HandShake, payload);

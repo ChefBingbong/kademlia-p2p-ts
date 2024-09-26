@@ -48,7 +48,7 @@ class KademliaNode {
     this.connections = new Map();
 
     this.udpTransport = new UDPTransport(this.nodeId, this.port);
-    this.wsTransport = new WebSocketTransport(this.nodeId, this.port, []);
+    this.wsTransport = new WebSocketTransport(this.nodeId, this.port);
 
     this.emitter = new P2PNetworkEventEmitter(false);
     this.emitter.on.bind(this.emitter);

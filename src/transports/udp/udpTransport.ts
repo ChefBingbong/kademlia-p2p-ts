@@ -3,14 +3,9 @@ import { Message, MessagePayload, UDPDataInfo } from "../../message/message";
 import { MessageType } from "../../message/types";
 import { timeoutReject } from "../../node/utils";
 import { extractError } from "../../utils/extractError";
-import AbstractTransport from "../abstractTransport/abstractTransport";
+import AbstractTransport, { BaseMessageType } from "../abstractTransport/abstractTransport";
 
-class UDPTransport extends AbstractTransport<dgram.Socket> {
-  public messages: Partial<{ [key in MessageType]: Map<string, Message<MessagePayload<UDPDataInfo>>> }> = {
-    [MessageType.FindNode]: new Map<string, Message<MessagePayload<UDPDataInfo>>>(),
-    [MessageType.Reply]: new Map<string, Message<MessagePayload<UDPDataInfo>>>(),
-  };
-
+class UDPTransport extends AbstractTransport<dgram.Socket, BaseMessageType> {
   constructor(nodeId: number, port: number) {
     super(nodeId, port, dgram.createSocket("udp4"));
     this.setupListeners();
@@ -24,12 +19,20 @@ class UDPTransport extends AbstractTransport<dgram.Socket> {
             port: this.port,
             address: this.address,
           },
-          () => resolve(null),
+          () => resolve(this.listen()),
         );
       } catch (error) {
         reject(error);
       }
     });
+  }
+
+  public listen(cb?: () => void): (cb?: any) => void {
+    this.messages = {
+      [MessageType.FindNode]: new Map<string, any>(),
+      [MessageType.Reply]: new Map<string, any>(),
+    };
+    return (cb) => this.close(cb);
   }
 
   public sendMessage = async <T extends MessagePayload<UDPDataInfo>>(
@@ -60,9 +63,9 @@ class UDPTransport extends AbstractTransport<dgram.Socket> {
     });
   }
 
-  public close() {
+  public close(callback?: () => void) {
     this.server.removeAllListeners("message");
-    this.server.close();
+    this.server.close(callback);
   }
 }
 

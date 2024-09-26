@@ -224,8 +224,6 @@ class KademliaNode {
         break;
       }
       case MessageType.Braodcast: {
-        const packet = this.buildPacket<T>(type, payload);
-        const recipient = { address: packet.destination, nodeId: Number(packet.message.to) - 3000 };
         const message = this.createTcpMessage<T>(recipient, MessageType.Braodcast, packet);
         this.wsTransport.sendMessage<T>(message);
         break;
@@ -314,7 +312,7 @@ class KademliaNode {
       toPort,
       this.nodeId,
       toNodeId,
-      Transports.Udp,
+      Transports.Tcp,
       data,
       type,
     );

@@ -14,7 +14,7 @@ import { extractError } from "../utils/extractError";
 import { BIT_SIZE } from "./constants";
 import { P2PNetworkEventEmitter } from "./eventEmitter";
 
-class KademliaNode {
+class KademliaNode implements BaseNode {
   public readonly address: string;
   public readonly port: number;
   public readonly nodeId: number;
@@ -224,6 +224,8 @@ class KademliaNode {
         break;
       }
       case MessageType.Braodcast: {
+        const packet = this.buildPacket<T>(type, payload);
+        const recipient = { address: packet.destination, nodeId: Number(packet.message.to) - 3000 };
         const message = this.createTcpMessage<T>(recipient, MessageType.Braodcast, packet);
         this.wsTransport.sendMessage<T>(message);
         break;

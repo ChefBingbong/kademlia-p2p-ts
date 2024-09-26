@@ -14,7 +14,7 @@ import { extractError } from "../utils/extractError";
 import { BIT_SIZE } from "./constants";
 import { P2PNetworkEventEmitter } from "./eventEmitter";
 
-class KademliaNode implements BaseNode {
+class KademliaNode {
   public readonly address: string;
   public readonly port: number;
   public readonly nodeId: number;
@@ -193,15 +193,6 @@ class KademliaNode implements BaseNode {
       await this.findNodeRecursiveSearch(contactedNodes, nodeShortlist, initialClosestNode);
     }
   };
-  private findNodes = async (key: number): Promise<number[]> => {
-    const contacted = new Map<string, number>();
-    const shortlist = this.table.findNode(key);
-
-    let currentClosestNode = shortlist[0];
-    await this.findNodeRecursiveSearch(contacted, shortlist, currentClosestNode);
-
-    return Array.from(contacted.values());
-  };
 
   public getTransportMessages = (transport: Transports, type: MessageType) => {
     switch (transport) {
@@ -280,6 +271,16 @@ class KademliaNode implements BaseNode {
     } catch (error) {
       console.error(error);
     }
+  };
+
+  private findNodes = async (key: number): Promise<number[]> => {
+    const contacted = new Map<string, number>();
+    const shortlist = this.table.findNode(key);
+
+    let currentClosestNode = shortlist[0];
+    await this.findNodeRecursiveSearch(contacted, shortlist, currentClosestNode);
+
+    return Array.from(contacted.values());
   };
 
   private handleBroadcastMessage = async () => {

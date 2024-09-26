@@ -175,6 +175,33 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
   };
 
   // event handler logic
+  public onMessage<T extends (message: TcpPacket<BroadcastData | DirectData>) => Promise<void>, R = PacketType>(
+    callback: T,
+    type: R,
+  ) {
+    switch (type) {
+      case PacketType.Broadcast:
+        this.on("broadcast", async <T extends BroadcastData>(message: TcpPacket<T>) => {
+          try {
+            await callback(message);
+          } catch (error) {
+            console.log(error);
+            throw new ErrorWithCode(`Error prcessing broadcast message for ${this.port}`, ProtocolError.INTERNAL_ERROR);
+          }
+        });
+        break;
+      case PacketType.Direct:
+        this.on("direct", async <T extends DirectData>(message: TcpPacket<T>) => {
+          try {
+            await callback(message);
+          } catch (error) {
+            console.log(error);
+            throw new ErrorWithCode(`Error prcessing direct message for ${this.port}`, ProtocolError.INTERNAL_ERROR);
+          }
+        });
+    }
+  }
+
   public onPeerConnection = (callback?: () => Promise<void>) => {
     this.on("connect", async ({ nodeId }: { nodeId: string }) => {
       console.log(`New node connected: ${nodeId}`);
@@ -195,28 +222,6 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
       } catch (error) {
         console.log(error);
         throw new ErrorWithCode(`Error handling peer disconnection for ${this.port}`, ProtocolError.INTERNAL_ERROR);
-      }
-    });
-  };
-
-  public onBroadcastMessage = (callback?: () => Promise<void>) => {
-    this.on("broadcast", async <T extends BroadcastData>(message: TcpPacket<T>) => {
-      try {
-        await callback();
-      } catch (error) {
-        console.log(error);
-        throw new ErrorWithCode(`Error prcessing broadcast message for ${this.port}`, ProtocolError.INTERNAL_ERROR);
-      }
-    });
-  };
-
-  public onDirectMessage = (callback?: () => Promise<void>) => {
-    this.on("direct", async <T extends BroadcastData>(message: TcpPacket<T>) => {
-      try {
-        await callback();
-      } catch (error) {
-        console.log(error);
-        throw new ErrorWithCode(`Error prcessing direct message for ${this.port}`, ProtocolError.INTERNAL_ERROR);
       }
     });
   };

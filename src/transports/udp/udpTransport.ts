@@ -2,7 +2,7 @@ import dgram from "dgram";
 import { Message, MessagePayload, UDPDataInfo } from "../../message/message";
 import { MessageType } from "../../message/types";
 import { extractError } from "../../utils/extractError";
-import { timeoutReject } from "../../utils/nodeUtils";
+import { timeoutReject } from "../../utils/utils";
 import AbstractTransport, { BaseMessageType } from "../abstractTransport/abstractTransport";
 
 class UDPTransport extends AbstractTransport<dgram.Socket, BaseMessageType> {
@@ -57,7 +57,7 @@ class UDPTransport extends AbstractTransport<dgram.Socket, BaseMessageType> {
     }
   };
 
-  public onMessage(callback: (msg: Buffer, info: dgram.RemoteInfo) => Promise<void>) {
+  public onMessage<T extends (msg: Buffer, info: dgram.RemoteInfo) => Promise<void>>(callback: T) {
     this.server.on("message", (message, remoteInfo) => {
       callback(message, remoteInfo);
     });

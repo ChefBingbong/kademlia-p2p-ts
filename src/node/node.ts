@@ -74,8 +74,8 @@ class KademliaNode {
 
   public listen(): (cb?: any) => void {
     this.udpTransport.onMessage(this.handleMessage);
-    this.wsTransport.onBroadcastMessage(this.handleBroadcastMessage);
-    this.wsTransport.onDirectMessage(this.handleDirectMessage);
+    this.wsTransport.onMessage(this.handleBroadcastMessage, PacketType.Broadcast);
+    this.wsTransport.onMessage(this.handleDirectMessage, PacketType.Direct);
 
     this.wsTransport.onPeerConnection(() => null);
     this.wsTransport.onPeerDisconnect(() => null);

@@ -1,6 +1,8 @@
 import dgram from "dgram";
 import { Server } from "ws";
+import { Message, MessagePayload, UDPDataInfo } from "../../message/message";
 import { MessageType, PacketType } from "../../message/types";
+import { BroadcastData, DirectData, TcpPacket } from "../types";
 
 export type BaseMessageType = Partial<{ [key in MessageType]: Map<string, any> }>;
 
@@ -31,7 +33,11 @@ abstract class AbstractTransport<TransportType extends dgram.Socket | Server, TM
 
   abstract setupListeners(): void;
   abstract listen(): void;
+
   abstract onMessage<T extends (args?: any) => Promise<void>, R extends PacketType>(callback: T, type?: R): void;
+  abstract sendMessage<T extends TcpPacket<BroadcastData | DirectData> & MessagePayload<UDPDataInfo>>(
+    message: Message<T>,
+  ): void;
 }
 
 export default AbstractTransport;

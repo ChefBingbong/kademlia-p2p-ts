@@ -1,7 +1,7 @@
 import { KBucket } from "../kBucket/kBucket";
 import { BIT_SIZE, HASH_SIZE } from "../node/constants";
 import KademliaNode from "../node/node";
-import { XOR } from "../utils/utils";
+import { XOR } from "../utils/nodeUtils";
 
 type CloseNodes = {
   distance: number;

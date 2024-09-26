@@ -218,12 +218,16 @@ class KademliaNode {
     switch (type) {
       case MessageType.DirectMessage: {
         const packet = this.buildPacket<T>(type, payload);
-        this.wsTransport.sendMessage<T>(packet);
+        const recipient = { address: packet.destination, nodeId: Number(packet.message.to) - 3000 };
+        const message = this.createTcpMessage<T>(recipient, MessageType.DirectMessage, packet);
+        this.wsTransport.sendMessage<T>(message);
         break;
       }
       case MessageType.Braodcast: {
         const packet = this.buildPacket<T>(type, payload);
-        this.wsTransport.sendMessage<T>(packet);
+        const recipient = { address: packet.destination, nodeId: Number(packet.message.to) - 3000 };
+        const message = this.createTcpMessage<T>(recipient, MessageType.Braodcast, packet);
+        this.wsTransport.sendMessage<T>(message);
         break;
       }
       default:
@@ -289,6 +293,23 @@ class KademliaNode {
   protected createUdpMessage = <T>(to: MessageNode, type: MessageType, data: MessagePayload<T>) => {
     const { address: toPort, nodeId: toNodeId } = to;
     return Message.create<MessagePayload<T>>(
+      this.port.toString(),
+      toPort,
+      this.nodeId,
+      toNodeId,
+      Transports.Udp,
+      data,
+      type,
+    );
+  };
+
+  protected createTcpMessage = <T extends BroadcastData | DirectData>(
+    to: MessageNode,
+    type: MessageType,
+    data: TcpPacket<T>,
+  ) => {
+    const { address: toPort, nodeId: toNodeId } = to;
+    return Message.create<TcpPacket<T>>(
       this.port.toString(),
       toPort,
       this.nodeId,

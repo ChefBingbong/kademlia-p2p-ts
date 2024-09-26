@@ -1,8 +1,8 @@
 import dgram from "dgram";
 import { Message, MessagePayload, UDPDataInfo } from "../../message/message";
 import { MessageType } from "../../message/types";
-import { timeoutReject } from "../../node/utils";
 import { extractError } from "../../utils/extractError";
+import { timeoutReject } from "../../utils/nodeUtils";
 import AbstractTransport, { BaseMessageType } from "../abstractTransport/abstractTransport";
 
 class UDPTransport extends AbstractTransport<dgram.Socket, BaseMessageType> {

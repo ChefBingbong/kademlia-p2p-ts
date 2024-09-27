@@ -118,8 +118,9 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
       console.error(`Socket connection error: ${err.message}`);
     });
 
+    console.log(port - 3000);
     socket.on("open", async () => {
-      this.handleNewSocket(socket, port - 4000);
+      this.handleNewSocket(socket, port - 3000);
       cb?.();
     });
 

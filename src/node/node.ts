@@ -1,9 +1,11 @@
 import * as dgram from "dgram";
 import { v4 } from "uuid";
+import { Logger } from "winston";
 import { WebSocket } from "ws";
 import { JobExecutor } from "../discoveryScheduler/discExecutor";
 import { DiscoveryScheduler, SchedulerInfo } from "../discoveryScheduler/discoveryScheduler";
 import { App } from "../http/app";
+import { AppLogger } from "../logging/logger";
 import { Message, MessageNode, MessagePayload, UDPDataInfo } from "../message/message";
 import { MessageType, PacketType, Transports } from "../message/types";
 import RoutingTable from "../routingTable/routingTable";
@@ -14,7 +16,7 @@ import { extractError } from "../utils/extractError";
 import { BIT_SIZE } from "./constants";
 import { P2PNetworkEventEmitter } from "./eventEmitter";
 
-class KademliaNode {
+class KademliaNode extends AppLogger {
   public readonly address: string;
   public readonly port: number;
   public readonly nodeId: number;
@@ -22,6 +24,7 @@ class KademliaNode {
 
   public readonly table: RoutingTable;
   public readonly api: App;
+  public readonly log: Logger;
 
   public readonly contacted = new Map<string, number>();
   public readonly connections: Map<string, WebSocket>;
@@ -34,9 +37,12 @@ class KademliaNode {
   public discInitComplete: boolean;
 
   constructor(id: number, port: number) {
+    super("kademlia-node-logger", false);
+
     this.nodeId = id;
     this.port = port;
     this.address = "127.0.0.1";
+    this.log = this.logger;
 
     this.nodeContact = {
       address: this.port.toString(),

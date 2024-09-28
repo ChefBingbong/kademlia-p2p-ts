@@ -1,20 +1,56 @@
 import config from "./config/config";
+import { RedisClient } from "./db/redis";
 import KademliaNode from "./node/node";
-export const delay = async (delayTime: number) => await new Promise((resolve) => setTimeout(resolve, delayTime));
 
-async function main() {
-  if (config.port === "3000") {
-    const bootStrap = new KademliaNode(Number(config.port) - 3000, 3000);
+export let node: KademliaNode;
+export let redisClient: RedisClient;
 
-    bootStrap.start();
+export const updatePeerReplica = async (port: number, type: "DISCONNECT" | "CONNECT"): Promise<number[]> => {
+  let peers = await redisClient.getSingleData<number[]>("validators");
+  if (!peers) {
+    await redisClient.setSignleData("validators", [port]);
+    peers = [port];
   }
-  for (let i = 1; i < 16; i++) {
-    const nodeId = Number(config.port) + i;
-    const node = new KademliaNode(nodeId - 3000, nodeId);
-    await node.start();
-  }
-}
+  if (type === "DISCONNECT")
+    peers = [...peers].filter((value, index, self) => {
+      return self.indexOf(value) === index && value !== port;
+    });
+  else
+    peers = [...peers, port].filter((value, index, self) => {
+      return self.indexOf(value) === index;
+    });
+  await redisClient.setSignleData("validators", peers);
+  return peers;
+};
 
-main().catch((error) => {
-  console.error("Error:", error);
+export const startProtocol = async (): Promise<void> => {
+  if (!redisClient) throw new Error(`redis not initialized`);
+  const port = Number(config.port);
+
+  node = new KademliaNode(port - 3000, port);
+  await updatePeerReplica(port, "CONNECT");
+  await node.start();
+
+  process
+    .on("SIGINT", async (reason) => {
+      node.log.error(`SIGINT. ${reason}`);
+      await updatePeerReplica(port, "DISCONNECT");
+      process.exit();
+    })
+    .on("SIGTERM", async (reason) => {
+      node.log.error(`SIGTERM. ${reason}`);
+      await updatePeerReplica(port, "DISCONNECT");
+    })
+    .on("unhandledRejection", async (reason) => {
+      node.log.error(`Unhandled Rejection at Promise. Reason: ${reason}`);
+      await updatePeerReplica(port, "DISCONNECT");
+    })
+    .on("uncaughtException", async (reason) => {
+      node.log.error(`Uncaught Exception Rejection at Promise. Reason: ${reason}`);
+      await updatePeerReplica(port, "DISCONNECT");
+    });
+};
+
+startProtocol().then(() => {
+  console.log("Application started");
 });

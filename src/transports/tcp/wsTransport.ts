@@ -70,7 +70,6 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
     this.emitter.on(
       "message",
       <T extends BroadcastData | DirectData>({ data: message }: { data: Message<TcpPacket<T>> }) => {
-        console.log(message);
         if (this.messages.BROADCAST.has(message.data.id) || message.data.ttl < 1) return;
 
         if (message.data.type === PacketType.Broadcast) {
@@ -118,7 +117,6 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
       console.error(`Socket connection error: ${err.message}`);
     });
 
-    console.log(port - 3000);
     socket.on("open", async () => {
       this.handleNewSocket(socket, port - 3000);
       cb?.();

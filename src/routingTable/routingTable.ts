@@ -1,4 +1,6 @@
+import dgram from "dgram";
 import { KBucket } from "../kBucket/kBucket";
+import { Message, MessagePayload, UDPDataInfo } from "../message/message";
 import { BIT_SIZE, HASH_SIZE } from "../node/constants";
 import KademliaNode from "../node/node";
 import { XOR } from "../utils/nodeUtils";
@@ -9,14 +11,17 @@ type CloseNodes = {
 };
 
 class RoutingTable {
-  public tableId: number;
-  buckets: Map<number, KBucket>;
-  public node: KademliaNode;
+  public buckets: Map<number, KBucket>;
+  public readonly tableId: number;
+  public readonly node: KademliaNode;
+
+  private readonly store: Map<string, number[]>;
 
   constructor(tableId: number, node: KademliaNode) {
     this.tableId = tableId;
     this.buckets = new Map();
     this.node = node;
+    this.store = new Map();
   }
 
   public findBucket = (nodeId: number) => {
@@ -24,7 +29,7 @@ class RoutingTable {
     const bucket = this.buckets.get(bucketIndex);
 
     if (!bucket) {
-      const newBucket = new KBucket(bucketIndex, this.tableId);
+      const newBucket = new KBucket(bucketIndex, this.tableId, this.node);
       this.buckets.set(bucketIndex, newBucket);
       return newBucket;
     }
@@ -69,7 +74,7 @@ class RoutingTable {
     for (const [_, nodes] of this.buckets.entries()) {
       for (const nodeId of nodes.nodes) {
         const distance = XOR(nodeId, targetId);
-        console.log(distance);
+
         if (closestDistance === null || distance < closestDistance) {
           closestDistance = distance;
           closestNode = nodeId;
@@ -137,6 +142,19 @@ class RoutingTable {
       if (xorResult & (1 << i)) return i;
     }
     return 0;
+  };
+
+  public nodeStore = <T extends MessagePayload<UDPDataInfo>>(message: Message<T>, info: dgram.RemoteInfo) => {
+    const { data } = message.data;
+    this.store.set(data.resId, data.closestNodes);
+  };
+
+  public findValue = async (key: string): Promise<Array<number>> => {
+    if (this.store.has(key)) {
+      return this.store.get(key);
+    }
+
+    return this.findNode(Number(key), BIT_SIZE);
   };
 }
 

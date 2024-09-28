@@ -1,12 +1,18 @@
+import { v4 } from "uuid";
+import { MessagePayload, UDPDataInfo } from "../message/message";
+import { MessageType } from "../message/types";
 import { BIT_SIZE } from "../node/constants";
+import KademliaNode from "../node/node";
 
 export class KBucket {
-  public bucketSize: number = BIT_SIZE;
-  public parentNodeId: number;
-  public bucketId: number;
   public nodes: number[];
+  public readonly bucketSize: number = BIT_SIZE;
+  public readonly parentNodeId: number;
+  public readonly bucketId: number;
 
-  constructor(bucketId: number, parentNodeId: number) {
+  private readonly node: KademliaNode;
+
+  constructor(bucketId: number, parentNodeId: number, node: KademliaNode) {
     this.bucketId = bucketId;
     this.parentNodeId = parentNodeId;
     this.nodes = [];
@@ -30,8 +36,18 @@ export class KBucket {
       }
       return;
     }
-
-    this.nodes.shift();
+    try {
+      // try check if node is only lone if not remove its id from the nodes arr
+      const recipient = { address: (this.nodes[0] + 3000).toString(), nodeId: this.nodes[0] };
+      const payload = this.node.buildMessagePayload<UDPDataInfo>(MessageType.Ping, { resId: v4() }, this.nodes[0]);
+      const message = this.node.createUdpMessage<UDPDataInfo>(recipient, MessageType.Ping, payload);
+      await this.node.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(message, this.node.udpMessageResolver);
+    } catch (e) {
+      this.nodes.shift();
+      if (!this.nodes.includes(nodeId)) {
+        this.nodes.push(nodeId);
+      }
+    }
   }
 
   public moveToFront(nodeId: number) {

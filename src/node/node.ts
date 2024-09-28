@@ -26,7 +26,7 @@ class KademliaNode {
   public readonly contacted = new Map<string, number>();
   public readonly connections: Map<string, WebSocket>;
 
-  private readonly udpTransport: UDPTransport;
+  public readonly udpTransport: UDPTransport;
   private readonly wsTransport: WebSocketTransport;
   private readonly discScheduler: DiscoveryScheduler;
   private readonly emitter: P2PNetworkEventEmitter;
@@ -67,11 +67,6 @@ class KademliaNode {
     this.listen();
   }
 
-  public async start() {
-    await this.table.updateTables(0);
-    await this.initDiscScheduler();
-  }
-
   public listen(): (cb?: any) => void {
     this.udpTransport.onMessage(this.handleMessage);
     this.wsTransport.onMessage(this.handleBroadcastMessage, PacketType.Broadcast);
@@ -81,6 +76,11 @@ class KademliaNode {
     this.wsTransport.onPeerDisconnect(() => null);
 
     return (cb) => this.wsTransport.server.close(cb);
+  }
+
+  public async start() {
+    await this.table.updateTables(0);
+    await this.initDiscScheduler();
   }
 
   public async initDiscScheduler() {
@@ -115,15 +115,14 @@ class KademliaNode {
     });
   }
 
-  public udpMessageResolver = (params: any, resolve: (value?: unknown) => void, reject: (reason?: any) => void) => {
-    const { type, responseId } = params;
-    if (type === "REPLY") resolve();
-    this.emitter.once(`response_${responseId}`, (data: any) => {
-      if (data.error) {
-        return reject(data.error);
-      }
-      resolve(data.closestNodes);
-    });
+  private findNodes = async (key: number): Promise<number[]> => {
+    const contacted = new Map<string, number>();
+    const shortlist = this.table.findNode(key);
+
+    let currentClosestNode = shortlist[0];
+    await this.findNodeRecursiveSearch(contacted, shortlist, currentClosestNode);
+
+    return Array.from(contacted.values());
   };
 
   private handleFindNodeQuery = async (
@@ -134,7 +133,6 @@ class KademliaNode {
     initialClosestNode: number,
   ) => {
     let hasCloserThanExist = false;
-
     try {
       const closeNodes = await closeNodesResponse;
       contactedNodes.set(nodeId.toString(), nodeId);
@@ -163,7 +161,6 @@ class KademliaNode {
     initialClosestNode: number,
   ) => {
     const findNodePromises: Array<Promise<boolean>> = [];
-
     for (const node of nodeShortlist) {
       if (contactedNodes.has(node.toString())) {
         continue;
@@ -259,11 +256,33 @@ class KademliaNode {
           break;
         }
         case MessageType.FindValue:
-          break; // TO-DO
+          const result = await this.table.findValue(message.data.data.resId);
+          // TO-D-
+          break;
         case MessageType.Store:
-          break; // TO-DO
+          await this.table.nodeStore<MessagePayload<UDPDataInfo>>(message, info);
+          const recip = { address: message.from.address, nodeId: message.from.nodeId };
+
+          const msgPayload = this.buildMessagePayload<UDPDataInfo>(
+            MessageType.PeerDiscovery,
+            { resId: message.data.data.resId },
+            externalContact,
+          );
+          const msg = this.createUdpMessage<UDPDataInfo>(recip, MessageType.Reply, msgPayload);
+          await this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(msg, this.udpMessageResolver);
+          break;
         case MessageType.Ping:
-          break; // TO-DO
+          const recipient = { address: message.from.address, nodeId: message.from.nodeId };
+          this.udpTransport.messages.PING.set(message.data.data.resId, message);
+
+          const messagePayload = this.buildMessagePayload<UDPDataInfo>(
+            MessageType.PeerDiscovery,
+            { resId: message.data.data.resId },
+            externalContact,
+          );
+          const payload = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.Reply, messagePayload);
+          await this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(payload, this.udpMessageResolver);
+          break;
 
         default:
           return;
@@ -273,14 +292,16 @@ class KademliaNode {
     }
   };
 
-  private findNodes = async (key: number): Promise<number[]> => {
-    const contacted = new Map<string, number>();
-    const shortlist = this.table.findNode(key);
+  public udpMessageResolver = (params: any, resolve: (value?: unknown) => void, reject: (reason?: any) => void) => {
+    const { type, responseId } = params;
+    if (type === MessageType.Reply) resolve();
 
-    let currentClosestNode = shortlist[0];
-    await this.findNodeRecursiveSearch(contacted, shortlist, currentClosestNode);
-
-    return Array.from(contacted.values());
+    this.emitter.once(`response_${responseId}`, (data: any) => {
+      if (data.error) {
+        return reject(data.error);
+      }
+      resolve(data.closestNodes);
+    });
   };
 
   private handleBroadcastMessage = async () => {
@@ -291,7 +312,7 @@ class KademliaNode {
     console.log(`recieving direct message: ${this.port}`);
   };
 
-  protected createUdpMessage = <T>(to: MessageNode, type: MessageType, data: MessagePayload<T>) => {
+  public createUdpMessage = <T>(to: MessageNode, type: MessageType, data: MessagePayload<T>) => {
     const { address: toPort, nodeId: toNodeId } = to;
     return Message.create<MessagePayload<T>>(
       this.port.toString(),
@@ -321,7 +342,7 @@ class KademliaNode {
     );
   };
 
-  private buildMessagePayload = <T extends UDPDataInfo>(
+  public buildMessagePayload = <T extends UDPDataInfo>(
     type: MessageType,
     data: T,
     recipient: number,

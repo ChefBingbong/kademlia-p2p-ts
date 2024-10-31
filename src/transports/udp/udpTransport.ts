@@ -31,6 +31,7 @@ class UDPTransport extends AbstractTransport<dgram.Socket, BaseMessageType> {
     this.messages = {
       [MessageType.FindNode]: new Map<string, any>(),
       [MessageType.Reply]: new Map<string, any>(),
+      [MessageType.Ping]: new Map<string, any>(),
     };
     return (cb) => this.close(cb);
   }

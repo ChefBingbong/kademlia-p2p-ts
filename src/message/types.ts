@@ -41,6 +41,7 @@ export enum MessageType {
   FindValue = "FIND_VALUE",
   Store = "STORE",
   Ping = "PING",
+  Pong = "PONG",
 }
 
 export enum PacketType {

@@ -87,7 +87,7 @@ export function bucketIndex(a: Buffer, b: Buffer) {
 
 export function timeoutReject<R = unknown>(error?: Error): Promise<never | R> {
   return new Promise<R>((_, rej) => {
-    setTimeout(() => rej(error ?? new Error("timeout")), 60000);
+    setTimeout(() => rej(error ?? new Error("timeout")), 30000);
   });
 }
 
@@ -107,3 +107,9 @@ export function chunk<T = any>(arr: T[], count: number): T[][] {
 
   return result;
 }
+
+export const extractNumber = (message: string) => {
+  const regex = /(\d+)/;
+  const match = message.match(regex);
+  return match ? parseInt(match[0], 10) - 3000 : null;
+};

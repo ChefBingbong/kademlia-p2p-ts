@@ -21,6 +21,7 @@ import WebSocketTransport from "../transports/tcp/wsTransport";
 import { BroadcastData, DirectData, TcpPacket } from "../transports/types";
 import UDPTransport from "../transports/udp/udpTransport";
 import { extractError } from "../utils/extractError";
+import { extractNumber } from "../utils/nodeUtils";
 import { BIT_SIZE } from "./constants";
 import { P2PNetworkEventEmitter } from "./eventEmitter";
 
@@ -132,7 +133,7 @@ class KademliaNode extends AppLogger {
           }
         );
       } catch (error) {
-        console.error(`message: ${extractError(error)}, fn: executeCronTask`);
+        this.log.error(`message: ${extractError(error)}, fn: executeCronTask`);
       }
     });
   }
@@ -175,7 +176,13 @@ class KademliaNode extends AppLogger {
         }
       }
     } catch (e) {
-      console.error(e);
+      const errorMessage = extractError(e)
+      console.log(errorMessage)
+
+      if (errorMessage.includes('TIMEOUT')) {
+        const nodeId = extractNumber(errorMessage)
+        this.handleTcpDisconnet(nodeId)      
+      }
     }
 
     return hasCloserThanExist;
@@ -241,7 +248,7 @@ class KademliaNode extends AppLogger {
       case Transports.Udp:
         return this.udpTransport.messages[type];
       default:
-        console.log("No messages for this transport or type");
+        this.log.error("No messages for this transport or type");
     }
   };
 
@@ -279,7 +286,7 @@ class KademliaNode extends AppLogger {
         break;
       }
       default:
-        console.log("Message type does not exist");
+        this.log.error("Message type does not exist");
     }
   };
 
@@ -337,6 +344,10 @@ class KademliaNode extends AppLogger {
           const result = await this.table.findValue(message.data.data.resId);
           // TO-D-
           break;
+          case MessageType.Pong:
+        
+          // TO-DO
+          break;
         case MessageType.Store:
           await this.table.nodeStore<MessagePayload<UDPDataInfo>>(
             message,
@@ -370,13 +381,13 @@ class KademliaNode extends AppLogger {
           this.udpTransport.messages.PING.set(message.data.data.resId, message);
 
           const messagePayload = this.buildMessagePayload<UDPDataInfo>(
-            MessageType.PeerDiscovery,
+            MessageType.Pong,
             { resId: message.data.data.resId },
             externalContact
           );
           const payload = this.createUdpMessage<UDPDataInfo>(
             recipient,
-            MessageType.Reply,
+            MessageType.Pong,
             messagePayload
           );
           await this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(
@@ -388,8 +399,9 @@ class KademliaNode extends AppLogger {
         default:
           return;
       }
-    } catch (error) {
-      console.error(error);
+    } catch (e) {
+      const errorMessage = extractError(e)
+      this.log.error(errorMessage);
     }
   };
 
@@ -400,6 +412,7 @@ class KademliaNode extends AppLogger {
   ) => {
     const { type, responseId } = params;
     if (type === MessageType.Reply) resolve();
+    if (type === MessageType.Pong) resolve();
 
     this.emitter.once(`response_${responseId}`, (data: any) => {
       if (data.error) {

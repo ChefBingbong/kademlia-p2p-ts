@@ -24,31 +24,31 @@ export const updatePeerReplica = async (port: number, type: "DISCONNECT" | "CONN
 };
 
 export const startProtocol = async (): Promise<void> => {
-  if (!redisClient) throw new Error(`redis not initialized`);
+  // if (!redisClient) throw new Error(`redis not initialized`);
   const port = Number(config.port);
 
   node = new KademliaNode(port - 3000, port);
-  await updatePeerReplica(port, "CONNECT");
+  // await updatePeerReplica(port, "CONNECT");
   await node.start();
 
-  process
-    .on("SIGINT", async (reason) => {
-      node.log.error(`SIGINT. ${reason}`);
-      await updatePeerReplica(port, "DISCONNECT");
-      process.exit();
-    })
-    .on("SIGTERM", async (reason) => {
-      node.log.error(`SIGTERM. ${reason}`);
-      await updatePeerReplica(port, "DISCONNECT");
-    })
-    .on("unhandledRejection", async (reason) => {
-      node.log.error(`Unhandled Rejection at Promise. Reason: ${reason}`);
-      await updatePeerReplica(port, "DISCONNECT");
-    })
-    .on("uncaughtException", async (reason) => {
-      node.log.error(`Uncaught Exception Rejection at Promise. Reason: ${reason}`);
-      await updatePeerReplica(port, "DISCONNECT");
-    });
+  // process
+  //   .on("SIGINT", async (reason) => {
+  //     node.log.error(`SIGINT. ${reason}`);
+  //     await updatePeerReplica(port, "DISCONNECT");
+  //     process.exit();
+  //   })
+  //   .on("SIGTERM", async (reason) => {
+  //     node.log.error(`SIGTERM. ${reason}`);
+  //     await updatePeerReplica(port, "DISCONNECT");
+  //   })
+  //   .on("unhandledRejection", async (reason) => {
+  //     node.log.error(`Unhandled Rejection at Promise. Reason: ${reason}`);
+  //     await updatePeerReplica(port, "DISCONNECT");
+  //   })
+  //   .on("uncaughtException", async (reason) => {
+  //     node.log.error(`Uncaught Exception Rejection at Promise. Reason: ${reason}`);
+  //     await updatePeerReplica(port, "DISCONNECT");
+  //   });
 };
 
 startProtocol().then(() => {

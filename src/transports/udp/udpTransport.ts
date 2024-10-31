@@ -31,6 +31,7 @@ class UDPTransport extends AbstractTransport<dgram.Socket, BaseMessageType> {
     this.messages = {
       [MessageType.FindNode]: new Map<string, any>(),
       [MessageType.Reply]: new Map<string, any>(),
+      [MessageType.Ping]: new Map<string, any>(),
     };
     return (cb) => this.close(cb);
   }
@@ -49,7 +50,9 @@ class UDPTransport extends AbstractTransport<dgram.Socket, BaseMessageType> {
           callback(args, resolve, reject);
         });
       });
-      const error = new Error("send timeout");
+      const error = new Error(
+        `TIMEOUT: error sending message to ${Number(message.to.address)}`
+      );
       return Promise.race([nodeResponse, timeoutReject<number[]>(error)]);
     } catch (error) {
       console.error(`message: ${extractError(error)}, fn: sendMessage UDPTransport`);

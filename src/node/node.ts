@@ -21,6 +21,7 @@ import WebSocketTransport from "../transports/tcp/wsTransport";
 import { BroadcastData, DirectData, TcpPacket } from "../transports/types";
 import UDPTransport from "../transports/udp/udpTransport";
 import { extractError } from "../utils/extractError";
+import { extractNumber } from "../utils/nodeUtils";
 import { BIT_SIZE } from "./constants";
 import { P2PNetworkEventEmitter } from "./eventEmitter";
 
@@ -123,7 +124,7 @@ class KademliaNode extends AppLogger {
                 this.nodeId !== closestNode
               ) {
                 this.wsTransport.connect(closestNode + 3000, () => {
-                  console.log(
+                  this.log.info(
                     `Connection to ${closestNode + 3000} established.`
                   );
                 });
@@ -132,7 +133,10 @@ class KademliaNode extends AppLogger {
           }
         );
       } catch (error) {
-        console.error(`message: ${extractError(error)}, fn: executeCronTask`);
+        const errorMessage = `message: ${extractError(
+          error
+        )}, fn: executeCronTask`;
+        this.log.info(errorMessage);
       }
     });
   }
@@ -174,8 +178,16 @@ class KademliaNode extends AppLogger {
           hasCloserThanExist = true;
         }
       }
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      const errorMessage = `message: ${extractError(
+        error
+      )}, fn: handleFindNodeQuery`;
+
+      if (errorMessage.includes("TIMEOUT")) {
+        const nodeId = extractNumber(errorMessage);
+        this.handleTcpDisconnet(nodeId);
+      }
+      this.log.info(errorMessage);
     }
 
     return hasCloserThanExist;
@@ -203,34 +215,41 @@ class KademliaNode extends AppLogger {
         payload
       );
 
-      const findNodeResponse = this.udpTransport.sendMessage<
-        MessagePayload<UDPDataInfo>
-      >(message, this.udpMessageResolver);
-      findNodePromises.push(
-        this.handleFindNodeQuery(
-          findNodeResponse,
-          node,
-          contactedNodes,
-          nodeShortlist,
-          initialClosestNode
-        )
-      );
-    }
+      try {
+        const findNodeResponse = this.udpTransport.sendMessage<
+          MessagePayload<UDPDataInfo>
+        >(message, this.udpMessageResolver);
+        findNodePromises.push(
+          this.handleFindNodeQuery(
+            findNodeResponse,
+            node,
+            contactedNodes,
+            nodeShortlist,
+            initialClosestNode
+          )
+        );
 
-    if (!findNodePromises.length) {
-      console.log("No more contacts in shortlist");
-      return;
-    }
+        if (!findNodePromises.length) {
+          console.log("No more contacts in shortlist");
+          return;
+        }
 
-    const results = await Promise.all(findNodePromises);
-    const isUpdatedClosest = results.some(Boolean);
+        const results = await Promise.all(findNodePromises);
+        const isUpdatedClosest = results.some(Boolean);
 
-    if (isUpdatedClosest && contactedNodes.size < BIT_SIZE) {
-      await this.findNodeRecursiveSearch(
-        contactedNodes,
-        nodeShortlist,
-        initialClosestNode
-      );
+        if (isUpdatedClosest && contactedNodes.size < BIT_SIZE) {
+          await this.findNodeRecursiveSearch(
+            contactedNodes,
+            nodeShortlist,
+            initialClosestNode
+          );
+        }
+      } catch (error) {
+        const errorMessage = `message: ${extractError(
+          error
+        )}, fn: findNodeRecursiveSearch`;
+        this.log.info(errorMessage);
+      }
     }
   };
 
@@ -298,11 +317,21 @@ class KademliaNode extends AppLogger {
             message
           );
 
-          const closestNodes = message.data.data.closestNodes;
-          const resId = message.data.data.resId;
+          try {
+            const closestNodes = message.data.data.closestNodes;
+            const resId = message.data.data.resId;
 
-          await this.table.updateTables(closestNodes);
-          this.emitter.emit(`response_${resId}`, { closestNodes, error: null });
+            await this.table.updateTables(closestNodes);
+            this.emitter.emit(`response_${resId}`, {
+              closestNodes,
+              error: null,
+            });
+          } catch (error) {
+            const errorMessage = `message: ${extractError(
+              error
+            )}, fn: handleMessage`;
+            this.log.info(errorMessage);
+          }
           break;
         }
         case MessageType.FindNode: {
@@ -337,6 +366,9 @@ class KademliaNode extends AppLogger {
           const result = await this.table.findValue(message.data.data.resId);
           // TO-D-
           break;
+        case MessageType.Pong:
+          // TO-DO
+          break;
         case MessageType.Store:
           await this.table.nodeStore<MessagePayload<UDPDataInfo>>(
             message,
@@ -370,13 +402,13 @@ class KademliaNode extends AppLogger {
           this.udpTransport.messages.PING.set(message.data.data.resId, message);
 
           const messagePayload = this.buildMessagePayload<UDPDataInfo>(
-            MessageType.PeerDiscovery,
+            MessageType.Pong,
             { resId: message.data.data.resId },
             externalContact
           );
           const payload = this.createUdpMessage<UDPDataInfo>(
             recipient,
-            MessageType.Reply,
+            MessageType.Pong,
             messagePayload
           );
           await this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(
@@ -400,6 +432,7 @@ class KademliaNode extends AppLogger {
   ) => {
     const { type, responseId } = params;
     if (type === MessageType.Reply) resolve();
+    if (type === MessageType.Pong) resolve();
 
     this.emitter.once(`response_${responseId}`, (data: any) => {
       if (data.error) {

@@ -3,6 +3,7 @@ import { Message } from "../../message/message";
 import { MessageType, PacketType } from "../../message/types";
 import { Listener, P2PNetworkEventEmitter } from "../../node/eventEmitter";
 import { ErrorWithCode, ProtocolError } from "../../utils/errors";
+import { extractError } from "../../utils/extractError";
 import AbstractTransport, {
   BaseMessageType,
 } from "../abstractTransport/abstractTransport";
@@ -123,13 +124,11 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
       );
 
     this.connect(this.port, () => {
-      console.log(`Connection to ${this.port} established.`);
+      this.log.info(`Connection to ${this.port} established.`);
     });
 
     this.server.on("connection", (socket) => {
-      this.handleNewSocket(socket, this.nodeId, () => {
-        console.log(`Connection to ${this.port} established.`);
-      });
+      this.handleNewSocket(socket, this.nodeId, () => null);
     });
 
     return (cb) => this.server.close(cb);
@@ -138,7 +137,7 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
   public connect = (port: number, cb?: () => void) => {
     const socket = new WebSocket(`ws://localhost:${port}`);
     socket.on("error", (err) => {
-      console.error(`Socket connection error: ${err.message}`);
+      this.log.error(`Socket connection error: ${err.message}`);
     });
 
     socket.on("open", async () => {
@@ -171,7 +170,7 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
 
     socket.on("error", (err) => {
       console.log(err);
-      console.error(`Socket connection error: ${err.message}`);
+      this.log.error(`Socket connection error: ${err.message}`);
     });
 
     return () => socket.terminate();
@@ -223,8 +222,9 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
           async <T extends BroadcastData>(message: TcpPacket<T>) => {
             try {
               await callback(message);
-            } catch (error) {
-              console.log(error);
+            } catch (e) {
+              const error = extractError(e);
+              this.log.error(error);
               throw new ErrorWithCode(
                 `Error prcessing broadcast message for ${this.port}`,
                 ProtocolError.INTERNAL_ERROR
@@ -239,8 +239,9 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
           async <T extends DirectData>(message: TcpPacket<T>) => {
             try {
               await callback(message);
-            } catch (error) {
-              console.log(error);
+            } catch (e) {
+              const error = extractError(e);
+              this.log.error(error);
               throw new ErrorWithCode(
                 `Error prcessing direct message for ${this.port}`,
                 ProtocolError.INTERNAL_ERROR
@@ -253,11 +254,11 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
 
   public onPeerConnection = (callback?: () => Promise<void>) => {
     this.on("connect", async ({ nodeId }: { nodeId: string }) => {
-      console.log(`New node connected: ${nodeId}`);
       try {
         await callback();
-      } catch (error) {
-        console.log(error);
+      } catch (e) {
+        const error = extractError(e);
+        this.log.error(error);
         throw new ErrorWithCode(
           `Error handling peer connection for ${this.port}`,
           ProtocolError.INTERNAL_ERROR
@@ -273,8 +274,9 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
         console.log(`Node disconnected: ${nodeId.connectionId}`);
         try {
           await callback(Number(nodeId.connectionId));
-        } catch (error) {
-          console.log(error);
+        } catch (e) {
+          const error = extractError(e);
+          this.log.error(error);
           throw new ErrorWithCode(
             `Error handling peer disconnection for ${this.port}`,
             ProtocolError.INTERNAL_ERROR

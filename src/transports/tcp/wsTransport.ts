@@ -3,8 +3,16 @@ import { Message } from "../../message/message";
 import { MessageType, PacketType } from "../../message/types";
 import { Listener, P2PNetworkEventEmitter } from "../../node/eventEmitter";
 import { ErrorWithCode, ProtocolError } from "../../utils/errors";
-import AbstractTransport, { BaseMessageType } from "../abstractTransport/abstractTransport";
-import { BroadcastData, DirectData, HandShake, TcpData, TcpPacket } from "../types";
+import AbstractTransport, {
+  BaseMessageType,
+} from "../abstractTransport/abstractTransport";
+import {
+  BroadcastData,
+  DirectData,
+  HandShake,
+  TcpData,
+  TcpPacket,
+} from "../types";
 
 export type TCPMessage = { type: string; message: string; to: string };
 type OnMessagePayload<T extends BroadcastData | DirectData> = {
@@ -52,25 +60,38 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
       this.emitter.emitDisconnect(connectionId, true);
     });
 
-    this.on("_message", async <T extends BroadcastData | DirectData>(pkt: OnMessagePayload<T>) => {
-      switch (pkt.message.type) {
-        case PacketType.HandShake:
-          const { nodeId } = pkt.message.data as HandShake;
-          this.neighbors.set(pkt.connectionId, pkt.connectionId);
-          this.emitter.emitConnect(nodeId.toString(), true);
-          break;
-        case PacketType.Message: {
-          const data = pkt.message.data as TcpPacket<T>;
-          this.emitter.emitMessage(pkt.connectionId, data, true);
-          break;
+    this.on(
+      "_message",
+      async <T extends BroadcastData | DirectData>(
+        pkt: OnMessagePayload<T>
+      ) => {
+        switch (pkt.message.type) {
+          case PacketType.HandShake:
+            const { nodeId } = pkt.message.data as HandShake;
+            this.neighbors.set(pkt.connectionId, pkt.connectionId);
+            this.emitter.emitConnect(nodeId.toString(), true);
+            break;
+          case PacketType.Message: {
+            const data = pkt.message.data as TcpPacket<T>;
+            this.emitter.emitMessage(pkt.connectionId, data, true);
+            break;
+          }
         }
       }
-    });
+    );
 
     this.emitter.on(
       "message",
-      <T extends BroadcastData | DirectData>({ data: message }: { data: Message<TcpPacket<T>> }) => {
-        if (this.messages.BROADCAST.has(message.data.id) || message.data.ttl < 1) return;
+      <T extends BroadcastData | DirectData>({
+        data: message,
+      }: {
+        data: Message<TcpPacket<T>>;
+      }) => {
+        if (
+          this.messages.BROADCAST.has(message.data.id) ||
+          message.data.ttl < 1
+        )
+          return;
 
         if (message.data.type === PacketType.Broadcast) {
           this.messages.BROADCAST.set(message.data.id, message.data.message);
@@ -87,7 +108,7 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
             this.sendMessage<T>(newMessage);
           }
         }
-      },
+      }
     );
 
     this.isInitialized = true;
@@ -96,7 +117,10 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
 
   public listen(cb?: () => void): (cb?: any) => void {
     if (!this.isInitialized)
-      throw new ErrorWithCode(`Cannot listen before server is initialized`, ProtocolError.PARAMETER_ERROR);
+      throw new ErrorWithCode(
+        `Cannot listen before server is initialized`,
+        ProtocolError.PARAMETER_ERROR
+      );
 
     this.connect(this.port, () => {
       console.log(`Connection to ${this.port} established.`);
@@ -125,7 +149,11 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
     return () => socket.terminate();
   };
 
-  public handleNewSocket = (socket: WebSocket, nodeId: number, callback?: () => void) => {
+  public handleNewSocket = (
+    socket: WebSocket,
+    nodeId: number,
+    callback?: () => void
+  ) => {
     const connectionId = nodeId.toString();
 
     this.connections.set(connectionId, socket);
@@ -149,7 +177,9 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
     return () => socket.terminate();
   };
 
-  public sendMessage = <T extends BroadcastData | DirectData>(message: Message<TcpPacket<T>>) => {
+  public sendMessage = <T extends BroadcastData | DirectData>(
+    message: Message<TcpPacket<T>>
+  ) => {
     switch (message.data.type) {
       case PacketType.Direct:
         this.send(message.data.destination, PacketType.Message, message);
@@ -167,7 +197,7 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
   private send = <T extends TcpData>(
     nodeId: string,
     type: "message" | "handshake",
-    data: Message<TcpPacket<T>> | HandShake,
+    data: Message<TcpPacket<T>> | HandShake
   ) => {
     const connectionId = this.neighbors.get(nodeId) ?? nodeId;
     const socket = this.connections.get(connectionId);
@@ -175,37 +205,49 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
     if (!socket)
       throw new ErrorWithCode(
         `Attempt to send data to connection that does not exist ${connectionId}`,
-        ProtocolError.INTERNAL_ERROR,
+        ProtocolError.INTERNAL_ERROR
       );
 
     socket.send(JSON.stringify({ type, data }));
   };
 
   // event handler logic
-  public onMessage<T extends (message: TcpPacket<BroadcastData | DirectData>) => Promise<void>, R = PacketType>(
-    callback: T,
-    type: R,
-  ) {
+  public onMessage<
+    T extends (message: TcpPacket<BroadcastData | DirectData>) => Promise<void>,
+    R = PacketType
+  >(callback: T, type: R) {
     switch (type) {
       case PacketType.Broadcast:
-        this.on("broadcast", async <T extends BroadcastData>(message: TcpPacket<T>) => {
-          try {
-            await callback(message);
-          } catch (error) {
-            console.log(error);
-            throw new ErrorWithCode(`Error prcessing broadcast message for ${this.port}`, ProtocolError.INTERNAL_ERROR);
+        this.on(
+          "broadcast",
+          async <T extends BroadcastData>(message: TcpPacket<T>) => {
+            try {
+              await callback(message);
+            } catch (error) {
+              console.log(error);
+              throw new ErrorWithCode(
+                `Error prcessing broadcast message for ${this.port}`,
+                ProtocolError.INTERNAL_ERROR
+              );
+            }
           }
-        });
+        );
         break;
       case PacketType.Direct:
-        this.on("direct", async <T extends DirectData>(message: TcpPacket<T>) => {
-          try {
-            await callback(message);
-          } catch (error) {
-            console.log(error);
-            throw new ErrorWithCode(`Error prcessing direct message for ${this.port}`, ProtocolError.INTERNAL_ERROR);
+        this.on(
+          "direct",
+          async <T extends DirectData>(message: TcpPacket<T>) => {
+            try {
+              await callback(message);
+            } catch (error) {
+              console.log(error);
+              throw new ErrorWithCode(
+                `Error prcessing direct message for ${this.port}`,
+                ProtocolError.INTERNAL_ERROR
+              );
+            }
           }
-        });
+        );
     }
   }
 
@@ -216,21 +258,30 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
         await callback();
       } catch (error) {
         console.log(error);
-        throw new ErrorWithCode(`Error handling peer connection for ${this.port}`, ProtocolError.INTERNAL_ERROR);
+        throw new ErrorWithCode(
+          `Error handling peer connection for ${this.port}`,
+          ProtocolError.INTERNAL_ERROR
+        );
       }
     });
   };
 
-  public onPeerDisconnect = (callback?: () => Promise<void>) => {
-    this.on("disconnect", async ({ nodeId }: { nodeId: string }) => {
-      console.log(`Node disconnected: ${nodeId}`);
-      try {
-        await callback();
-      } catch (error) {
-        console.log(error);
-        throw new ErrorWithCode(`Error handling peer disconnection for ${this.port}`, ProtocolError.INTERNAL_ERROR);
+  public onPeerDisconnect = (callback?: (args: any) => Promise<void>) => {
+    this.on(
+      "disconnect",
+      async ({ nodeId }: { nodeId: { connectionId: string } }) => {
+        console.log(`Node disconnected: ${nodeId.connectionId}`);
+        try {
+          await callback(Number(nodeId.connectionId));
+        } catch (error) {
+          console.log(error);
+          throw new ErrorWithCode(
+            `Error handling peer disconnection for ${this.port}`,
+            ProtocolError.INTERNAL_ERROR
+          );
+        }
       }
-    });
+    );
   };
 }
 

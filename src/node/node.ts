@@ -21,7 +21,7 @@ import WebSocketTransport from "../transports/tcp/wsTransport";
 import { BroadcastData, DirectData, TcpPacket } from "../transports/types";
 import UDPTransport from "../transports/udp/udpTransport";
 import { extractError } from "../utils/extractError";
-import { extractNumber } from "../utils/nodeUtils";
+import { extractNumber, getIdealDistance } from "../utils/nodeUtils";
 import { BIT_SIZE } from "./constants";
 import { P2PNetworkEventEmitter } from "./eventEmitter";
 
@@ -70,7 +70,7 @@ class KademliaNode extends AppLogger {
     this.emitter.off.bind(this.emitter);
 
     const jobId = "discScheduler";
-    const schedule = "*/20 * * * * *";
+    const schedule = "*/15 * * * * *";
     const timestamp = Date.now();
     const info: SchedulerInfo = {
       start: timestamp,
@@ -105,7 +105,8 @@ class KademliaNode extends AppLogger {
   }
 
   public async start() {
-    await this.table.updateTables(0);
+    const clostest = getIdealDistance()
+    await this.table.updateTables([0, ...clostest]);
     await this.initDiscScheduler();
   }
 
@@ -116,7 +117,7 @@ class KademliaNode extends AppLogger {
           `${this.discScheduler.jobId}-${this.port}`,
           async () => {
             const closeNodes = await this.findNodes(this.nodeId);
-            await this.table.updateTables(closeNodes);
+            // await this.table.updateTables(closeNodes);
 
             for (const closestNode of closeNodes) {
               if (
@@ -498,6 +499,8 @@ class KademliaNode extends AppLogger {
     if (this.nodeId === nodeId) return;
     const bucket = this.table.findBucket(nodeId);
     bucket.removeNode(nodeId);
+
+    if (bucket.nodes.length === 0) this.table.removeBucket(nodeId)
   };
 }
 

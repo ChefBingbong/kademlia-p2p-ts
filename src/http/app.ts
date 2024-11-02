@@ -11,62 +11,62 @@ import errorHandlingMiddleware from "./midleware/errorHandler.middleware";
 import BaseRoute from "./routes/base.route";
 
 export class App extends AppLogger {
-  public isListening = false;
+	public isListening = false;
 
-  public app: express.Application;
-  public port: string | number;
-  static log: Logger;
-  public node: KademliaNode;
+	public app: express.Application;
+	public port: string | number;
+	static log: Logger;
+	public node: KademliaNode;
 
-  constructor(node: KademliaNode, port: number) {
-    super();
-    this.app = express();
-    this.port = port;
+	constructor(node: KademliaNode, port: number) {
+		super();
+		this.app = express();
+		this.port = port;
 
-    this.node = node;
-    this.configureMiddlewares();
-    this.configureRoutes();
-    this.configureErrorHandling();
+		this.node = node;
+		this.configureMiddlewares();
+		this.configureRoutes();
+		this.configureErrorHandling();
 
-    App.log = this.getLogger("on-ramp-api-logger");
-  }
+		App.log = this.getLogger("on-ramp-api-logger");
+	}
 
-  private configureMiddlewares(): void {
-    this.app.use(cors({ origin: "*" }));
-    this.app.use(hpp());
-    this.app.use(helmet());
-    this.app.use(compression());
-    this.app.use(express.json());
-    // this.app.use(express.urlencoded({ extended: true }));
-  }
+	private configureMiddlewares(): void {
+		this.app.use(cors({ origin: "*" }));
+		this.app.use(hpp());
+		this.app.use(helmet());
+		this.app.use(compression());
+		this.app.use(express.json());
+		// this.app.use(express.urlencoded({ extended: true }));
+	}
 
-  private configureRoutes(): void {
-    this.app.get("/", (req, res) => {
-      res.status(200).send({ result: "ok" });
-    });
+	private configureRoutes(): void {
+		this.app.get("/", (req, res) => {
+			res.status(200).send({ result: "ok" });
+		});
 
-    const route = new BaseRoute(this.node);
-    this.app.use("/", route.router);
-  }
+		const route = new BaseRoute(this.node);
+		this.app.use("/", route.router);
+	}
 
-  private configureErrorHandling(): void {
-    this.app.use(errorHandlingMiddleware);
-  }
+	private configureErrorHandling(): void {
+		this.app.use(errorHandlingMiddleware);
+	}
 
-  public listen(): void {
-    if (this.isListening) {
-      App.log.warn("App is already listening.");
-      return;
-    }
+	public listen(): void {
+		if (this.isListening) {
+			App.log.warn("App is already listening.");
+			return;
+		}
 
-    this.app.listen(this.port, () => {
-      this.isListening = true;
-      App.log.info(`======= ENV: ${config.env} =======`);
-      App.log.info(`🚀 App listening on the port ${this.port}`);
-    });
-  }
+		this.app.listen(this.port, () => {
+			this.isListening = true;
+			App.log.info(`======= ENV: ${config.env} =======`);
+			App.log.info(`🚀 App listening on the port ${this.port}`);
+		});
+	}
 
-  public getServer() {
-    return this.app;
-  }
+	public getServer() {
+		return this.app;
+	}
 }

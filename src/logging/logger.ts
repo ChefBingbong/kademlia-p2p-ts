@@ -65,9 +65,7 @@ export class AppLogger {
 					.replace(/"([^"]+)":\s*"([^"]*)"/g, "$1: $2")
 					.replace(/"([^"]+)":/g, "$1:");
 
-				return color(
-					`\n${color(level.padEnd(5))} | ${label.padEnd(10)} | ${message}, \n${metaDisplay}\n`,
-				);
+				return color(`\n${color(level.padEnd(5))} | ${label.padEnd(10)} | ${message}, \n${metaDisplay}\n`);
 			}
 
 			return `${timestamp} | ${color(level.padEnd(5))} | ${label.padEnd(10)} | ${color(message)}`;

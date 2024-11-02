@@ -2,35 +2,35 @@ import { type Logger, createLogger, format, transports } from "winston";
 import type * as Transport from "winston-transport";
 
 export class AppLogger {
-  private logger: Logger;
+	private logger: Logger;
 
-  constructor() {
-    this.initLogger();
-  }
+	constructor() {
+		this.initLogger();
+	}
 
-  private initLogger() {
-    if (!this.logger) {
-      const transportsConfig: Transport[] = [new transports.Console()];
-      const customFormat = format.combine(format.timestamp(), this.customPrintf());
+	private initLogger() {
+		if (!this.logger) {
+			const transportsConfig: Transport[] = [new transports.Console()];
+			const customFormat = format.combine(format.timestamp(), this.customPrintf());
 
-      this.logger = createLogger({
-        format: customFormat,
-        transports: transportsConfig,
-        level: "debug",
-      });
-    }
-  }
+			this.logger = createLogger({
+				format: customFormat,
+				transports: transportsConfig,
+				level: "debug",
+			});
+		}
+	}
 
-  private customPrintf() {
-    return format.printf(({ level, message, label, timestamp }) => {
-      return `${timestamp} | ${level.toLowerCase().padEnd(5)} | ${label.padEnd(20)} | ${message}`;
-    });
-  }
+	private customPrintf() {
+		return format.printf(({ level, message, label, timestamp }) => {
+			return `${timestamp} | ${level.toLowerCase().padEnd(5)} | ${label.padEnd(20)} | ${message}`;
+		});
+	}
 
-  getLogger(label: string) {
-    if (label.length > 30) {
-      throw new Error("Too long label");
-    }
-    return this.logger.child({ label });
-  }
+	getLogger(label: string) {
+		if (label.length > 30) {
+			throw new Error("Too long label");
+		}
+		return this.logger.child({ label });
+	}
 }

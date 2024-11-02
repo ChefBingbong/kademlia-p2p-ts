@@ -115,6 +115,7 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
 		const socket = new WebSocket(`ws://localhost:${port}`);
 		socket.on("error", (err) => {
 			this.log.error(`Socket connection error: ${err.message}`);
+			// this.emitter.emitDisconnect()
 		});
 
 		socket.on("open", async () => {

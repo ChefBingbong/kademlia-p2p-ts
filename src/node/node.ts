@@ -3,7 +3,7 @@ import { v4 } from "uuid";
 import { Logger } from "winston";
 import { WebSocket } from "ws";
 import { JobExecutor } from "../discoveryScheduler/discExecutor";
-import { DiscoveryScheduler, SchedulerInfo } from "../discoveryScheduler/discoveryScheduler";
+import { DiscoveryScheduler, SchedulerInfo, Schedules } from "../discoveryScheduler/discoveryScheduler";
 import { App } from "../http/app";
 import { AppLogger } from "../logging/logger";
 import { Message, MessageNode, MessagePayload, UDPDataInfo } from "../message/message";
@@ -62,7 +62,7 @@ class KademliaNode extends AppLogger {
 		this.emitter.off.bind(this.emitter);
 
 		const jobId = "discScheduler";
-		const schedule = "*/20 * * * * *";
+		const schedule = Schedules.Fast;
 		const timestamp = Date.now();
 		const info: SchedulerInfo = {
 			start: timestamp,
@@ -95,7 +95,7 @@ class KademliaNode extends AppLogger {
 
 	public async start() {
 		const clostest = getIdealDistance();
-		await this.table.updateTables([...clostest]);
+		await this.table.updateTables(clostest);
 		await this.initDiscScheduler();
 	}
 
@@ -103,20 +103,22 @@ class KademliaNode extends AppLogger {
 		this.discScheduler.createSchedule(this.discScheduler.schedule, async () => {
 			try {
 				await JobExecutor.addToQueue(`${this.discScheduler.jobId}-${this.port}`, async () => {
-					const timestamp = Date.now();
-
-					if (timestamp > this.discScheduler.info.chnageTime && !this.discInitComplete) {
-						this.discScheduler.setSchedule("*/30 * * * * *");
-						this.discScheduler.stopCronJob();
-						this.discInitComplete = true;
-
-						await this.initDiscScheduler();
-						console.log(`${this.port} initialized new cron for discovery interval ${timestamp}`);
-					}
-
 					const closeNodes = await this.findNodes(this.nodeId);
 					await this.table.updateTables(closeNodes);
+
 					const routingPeers = this.table.getAllPeers();
+					const numBuckets = Object.values(this.table.getAllBuckets()).length;
+
+					const minPeers = Boolean(routingPeers.length >= BIT_SIZE * 2 - BIT_SIZE / 2);
+					const isNteworkEstablished = Boolean(minPeers && numBuckets === BIT_SIZE);
+
+					if (this.discInitComplete) {
+						if (isNteworkEstablished && this.discScheduler.schedule === Schedules.Fast) {
+							await this.setDiscoveryInterval(Schedules.Slow);
+						} else if (!isNteworkEstablished && this.discScheduler.schedule === Schedules.Slow) {
+							await this.setDiscoveryInterval(Schedules.Fast);
+						}
+					}
 
 					for (const closestNode of routingPeers) {
 						if (!this.wsTransport.connections.has(closestNode.toString()) && this.nodeId !== closestNode) {
@@ -125,6 +127,7 @@ class KademliaNode extends AppLogger {
 							});
 						}
 					}
+					this.discInitComplete = true;
 				});
 			} catch (error) {
 				this.log.error(`message: ${extractError(error)}, fn: executeCronTask`);
@@ -190,6 +193,7 @@ class KademliaNode extends AppLogger {
 		const alphaContacts = nodeShortlist.slice(iteration * ALPHA, iteration * ALPHA + ALPHA);
 
 		for (const node of nodeShortlist) {
+			//need to test this with larger networks vs nodeshrtlost
 			if (contactedNodes.has(node.toString())) {
 				continue;
 			}
@@ -399,6 +403,14 @@ class KademliaNode extends AppLogger {
 		bucket.removeNode(nodeId);
 
 		if (bucket.nodes.length === 0) this.table.removeBucket(nodeId);
+	};
+
+	private setDiscoveryInterval = async (interval: string) => {
+		this.discScheduler.setSchedule(interval);
+		this.discScheduler.stopCronJob();
+		this.discInitComplete = true;
+		await this.initDiscScheduler();
+		console.log(`setting disc interval to ${interval}`);
 	};
 }
 

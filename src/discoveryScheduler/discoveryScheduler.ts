@@ -1,5 +1,9 @@
-import { schedule, ScheduledTask } from "node-cron";
+import { ScheduledTask, schedule } from "node-cron";
 
+export enum Schedules {
+	Fast = "*/5 * * * * *",
+	Slow = "*/30 * * * * *",
+}
 export type SchedulerInfo = {
 	start: number;
 	chnageTime: number;

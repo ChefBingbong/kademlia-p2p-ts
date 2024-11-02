@@ -24,6 +24,16 @@ class RoutingTable {
 		this.store = new Map();
 	}
 
+	public getAllPeers = () => {
+		const peers: number[] = [];
+		for (const [_, nodes] of this.buckets.entries()) {
+			for (const nodeId of nodes.nodes) {
+				peers.push(nodeId);
+			}
+		}
+		return peers;
+	};
+
 	public findBucket = (nodeId: number) => {
 		const bucketIndex = this.getBucketIndex(nodeId);
 		const bucket = this.buckets.get(bucketIndex);
@@ -94,25 +104,41 @@ class RoutingTable {
 		let aboveIndex = bucketIndex + 1;
 		let belowIndex = bucketIndex - 1;
 
-		while (closestNodes.length < count && (aboveIndex < HASH_SIZE || belowIndex >= 0)) {
-			if (aboveIndex < HASH_SIZE && this.buckets.has(aboveIndex)) {
-				this.addNodes(key, aboveIndex, closestNodes);
-				aboveIndex++;
-			} else {
+		const canIterateAbove = () => {
+			return aboveIndex !== HASH_SIZE; // 159
+		};
+
+		const canIterateBelow = () => {
+			return belowIndex >= 0;
+		};
+
+		while (true) {
+			if (closestNodes.length === count || (!canIterateBelow() && !canIterateAbove())) {
+				break;
+			}
+
+			while (canIterateAbove()) {
+				if (this.buckets.has(aboveIndex)) {
+					this.addNodes(key, aboveIndex, closestNodes);
+					aboveIndex++;
+					break;
+				}
 				aboveIndex++;
 			}
 
-			if (belowIndex >= 0 && this.buckets.has(belowIndex)) {
-				this.addNodes(key, belowIndex, closestNodes);
-				belowIndex--;
-			} else {
+			while (canIterateBelow()) {
+				if (this.buckets.has(belowIndex)) {
+					this.addNodes(key, belowIndex, closestNodes);
+					belowIndex--;
+					break;
+				}
 				belowIndex--;
 			}
 		}
 
-		closestNodes.sort((a, b) => b.distance - a.distance);
-		const trimmedNodes = this.reduceNodes(closestNodes, BIT_SIZE);
-		return trimmedNodes.map((c) => c.node);
+		closestNodes.sort((a, b) => a.distance - b.distance);
+		// const trimmedNodes = this.reduceNodes(closestNodes, BIT_SIZE);
+		return closestNodes.map((c) => c.node);
 	}
 	private reduceNodes(nodes: CloseNodes[], size: number): CloseNodes[] {
 		if (nodes.length > size) {
@@ -126,7 +152,8 @@ class RoutingTable {
 		if (!bucket) return;
 
 		for (const node of bucket.getNodes()) {
-			if (node === key || closestNodes.length >= BIT_SIZE) continue;
+			if (node === key) continue;
+			if (closestNodes.length === BIT_SIZE) break;
 
 			closestNodes.push({
 				distance: XOR(node, key),
@@ -141,7 +168,7 @@ class RoutingTable {
 		for (let i = BIT_SIZE - 1; i >= 0; i--) {
 			if (xorResult & (1 << i)) return i;
 		}
-		return 0;
+		return BIT_SIZE - 1;
 	};
 
 	public nodeStore = <T extends MessagePayload<UDPDataInfo>>(message: Message<T>, info: dgram.RemoteInfo) => {

@@ -31,7 +31,7 @@ class KademliaNode extends AppLogger {
 	public readonly connections: Map<string, WebSocket>;
 
 	public readonly udpTransport: UDPTransport;
-	private readonly wsTransport: WebSocketTransport;
+	public readonly wsTransport: WebSocketTransport;
 	private readonly discScheduler: DiscoveryScheduler;
 	private readonly emitter: P2PNetworkEventEmitter;
 
@@ -66,7 +66,7 @@ class KademliaNode extends AppLogger {
 		const timestamp = Date.now();
 		const info: SchedulerInfo = {
 			start: timestamp,
-			chnageTime: timestamp + 64000,
+			chnageTime: timestamp + 120000,
 		};
 
 		this.discScheduler = new DiscoveryScheduler({
@@ -103,10 +103,22 @@ class KademliaNode extends AppLogger {
 		this.discScheduler.createSchedule(this.discScheduler.schedule, async () => {
 			try {
 				await JobExecutor.addToQueue(`${this.discScheduler.jobId}-${this.port}`, async () => {
+					const timestamp = Date.now();
+
+					if (timestamp > this.discScheduler.info.chnageTime && !this.discInitComplete) {
+						this.discScheduler.setSchedule("*/30 * * * * *");
+						this.discScheduler.stopCronJob();
+						this.discInitComplete = true;
+
+						await this.initDiscScheduler();
+						console.log(`${this.port} initialized new cron for discovery interval ${timestamp}`);
+					}
+
 					const closeNodes = await this.findNodes(this.nodeId);
 					await this.table.updateTables(closeNodes);
+					const routingPeers = this.table.getAllPeers();
 
-					for (const closestNode of closeNodes) {
+					for (const closestNode of routingPeers) {
 						if (!this.wsTransport.connections.has(closestNode.toString()) && this.nodeId !== closestNode) {
 							this.wsTransport.connect(closestNode + 3000, () => {
 								console.log(`Connection from ${this.nodeId} to ${closestNode + 3000} established.`);
@@ -177,7 +189,7 @@ class KademliaNode extends AppLogger {
 		iteration = iteration == null ? 0 : iteration + 1;
 		const alphaContacts = nodeShortlist.slice(iteration * ALPHA, iteration * ALPHA + ALPHA);
 
-		for (const node of alphaContacts) {
+		for (const node of nodeShortlist) {
 			if (contactedNodes.has(node.toString())) {
 				continue;
 			}

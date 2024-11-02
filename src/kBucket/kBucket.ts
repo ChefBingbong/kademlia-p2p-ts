@@ -37,7 +37,7 @@ export class KBucket {
 
 		if (this.nodes.length < K_BUCKET_SIZE) {
 			if (!this.nodes.includes(nodeId)) {
-				this.nodes.push(nodeId);
+			   this.nodes.push(nodeId);
 			}
 			return;
 		}

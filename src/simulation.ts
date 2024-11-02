@@ -4,6 +4,7 @@ export const delay = async (delayTime: number) => await new Promise((resolve) =>
 
 async function main() {
 	const nodes = [];
+	const nodes2 = [] as KademliaNode[];
 
 	if (config.port === "3000") {
 		const bootStrap = new KademliaNode(Number(config.port) - 3000, 3000);
@@ -13,6 +14,8 @@ async function main() {
 	for (let i = 1; i < 256; i++) {
 		const nodeId = Number(config.port) + i;
 		const node = new KademliaNode(nodeId - 3000, nodeId);
+		nodes2.push(node);
+
 		nodes.push(await node.start());
 	}
 

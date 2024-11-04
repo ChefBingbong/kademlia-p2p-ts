@@ -15,4 +15,14 @@ export class Peer {
 	public updateLastSeen = () => {
 		this.lastSeen = Date.now();
 	};
+
+	public fromJSON = () => new Peer(this.nodeId, this.address, this.port);
+
+	public toJSON = () => {
+		return {
+			nodeId: this.nodeId,
+			address: this.address,
+			port: this.port,
+		};
+	};
 }

@@ -1,9 +1,9 @@
 import { ScheduledTask, schedule } from "node-cron";
 
 export enum Schedules {
-	Fast = "*/5 * * * * *",
-	Slow = "*/30 * * * * *",
-}
+		Fast = "*/35 * * * * *",
+		Slow = "*/30 * * * * *",
+	}
 export type SchedulerInfo = {
 	start: number;
 	chnageTime: number;
@@ -13,7 +13,6 @@ interface DiscoverySchedulerOpions {
 	jobId: string;
 	schedule: string;
 	process: NodeJS.Process;
-	info: SchedulerInfo;
 }
 export class DiscoveryScheduler {
 	public schedule: string;
@@ -21,13 +20,11 @@ export class DiscoveryScheduler {
 
 	public readonly jobId: string;
 	public readonly process: NodeJS.Process;
-	public readonly info: SchedulerInfo;
 
-	constructor({ jobId, schedule, process, info }: DiscoverySchedulerOpions) {
+	constructor({ jobId, schedule, process }: DiscoverySchedulerOpions) {
 		this.jobId = jobId;
 		this.process = process;
 		this.schedule = schedule;
-		this.info = info;
 	}
 
 	public createSchedule(interval: string, callback: () => Promise<void>) {

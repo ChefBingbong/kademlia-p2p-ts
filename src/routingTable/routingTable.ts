@@ -3,11 +3,12 @@ import { KBucket } from "../kBucket/kBucket";
 import { Message, MessagePayload, UDPDataInfo } from "../message/message";
 import { BIT_SIZE, HASH_SIZE } from "../node/constants";
 import KademliaNode from "../node/node";
+import { Peer } from "../peer/peer";
 import { XOR } from "../utils/nodeUtils";
 
 type CloseNodes = {
 	distance: number;
-	node: number;
+	node: Peer;
 };
 
 class RoutingTable {
@@ -15,27 +16,27 @@ class RoutingTable {
 	public readonly tableId: number;
 	public readonly node: KademliaNode;
 
-	private readonly store: Map<string, number[]>;
+	private readonly store: Map<string, Peer[]>;
 
 	constructor(tableId: number, node: KademliaNode) {
 		this.tableId = tableId;
 		this.buckets = new Map();
-		this.node = node;
 		this.store = new Map();
+		this.node = node;
 	}
 
 	public getAllPeers = () => {
-		const peers: number[] = [];
+		const peers: Peer[] = [];
 		for (const [_, nodes] of this.buckets.entries()) {
-			for (const nodeId of nodes.nodes) {
-				peers.push(nodeId);
+			for (const peer of nodes.nodes) {
+				peers.push(peer);
 			}
 		}
 		return peers;
 	};
 
-	public findBucket = (nodeId: number) => {
-		const bucketIndex = this.getBucketIndex(nodeId);
+	public findBucket = (peer: Peer) => {
+		const bucketIndex = this.getBucketIndex(peer.nodeId);
 		const bucket = this.buckets.get(bucketIndex);
 
 		if (!bucket) {
@@ -46,26 +47,25 @@ class RoutingTable {
 		return bucket;
 	};
 
-	public async updateTables(contact: number | Array<number>) {
+	public async updateTables(contact: Peer | Peer[]) {
 		const contacts = Array.isArray(contact) ? contact : [contact];
 		const promises: Array<Promise<unknown>> = [];
 
 		for (const c of contacts) {
 			const bucket = this.findBucket(c);
-
 			promises.push(bucket.updateBucketNode(c));
 		}
 
 		await Promise.all(contacts);
 	}
 
-	public removeBucket = (nodeId: number) => {
-		const bucketIndex = this.getBucketIndex(nodeId);
+	public removeBucket = (peer: Peer) => {
+		const bucketIndex = this.getBucketIndex(peer.nodeId);
 		this.buckets.delete(bucketIndex);
 	};
 
-	public containsBucket = (nodeId: number) => {
-		const bucketIndex = this.getBucketIndex(nodeId);
+	public containsBucket = (peer: Peer) => {
+		const bucketIndex = this.getBucketIndex(peer.nodeId);
 		this.buckets.has(bucketIndex);
 	};
 
@@ -77,17 +77,17 @@ class RoutingTable {
 		return bucketsJson;
 	};
 
-	public findClosestNode = (targetId: number): number | null => {
-		let closestNode: number | null = null;
+	public findClosestNode = (targetId: number): Peer | null => {
+		let closestNode: Peer | null = null;
 		let closestDistance: number | null = null;
 
 		for (const [_, nodes] of this.buckets.entries()) {
-			for (const nodeId of nodes.nodes) {
-				const distance = XOR(nodeId, targetId);
+			for (const peer of nodes.nodes) {
+				const distance = XOR(peer.nodeId, targetId);
 
 				if (closestDistance === null || distance < closestDistance) {
 					closestDistance = distance;
-					closestNode = nodeId;
+					closestNode = peer;
 				}
 			}
 		}
@@ -95,7 +95,7 @@ class RoutingTable {
 		return closestNode;
 	};
 
-	public findNode(key: number, count: number = BIT_SIZE): number[] {
+	public findNode(key: number, count: number = BIT_SIZE): Peer[] {
 		const closestNodes: CloseNodes[] = [];
 		const bucketIndex = this.getBucketIndex(key);
 
@@ -152,11 +152,11 @@ class RoutingTable {
 		if (!bucket) return;
 
 		for (const node of bucket.getNodes()) {
-			if (node === key) continue;
+			if (node.nodeId === key) continue;
 			if (closestNodes.length === BIT_SIZE) break;
 
 			closestNodes.push({
-				distance: XOR(node, key),
+				distance: XOR(node.nodeId, key),
 				node,
 			});
 		}
@@ -176,7 +176,7 @@ class RoutingTable {
 		this.store.set(data.resId, data.closestNodes);
 	};
 
-	public findValue = async (key: string): Promise<Array<number>> => {
+	public findValue = async (key: string): Promise<number[] | Peer[]> => {
 		if (this.store.has(key)) {
 			return this.store.get(key);
 		}

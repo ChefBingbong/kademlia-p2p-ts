@@ -50,13 +50,13 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
 
 		this.on("_disconnect", (connectionId) => {
 			this.neighbors.delete(connectionId);
+			this.connections.delete(connectionId);
 			this.emitter.emitDisconnect(connectionId, true);
 		});
 
 		this.on("_message", async <T extends BroadcastData | DirectData>(pkt: OnMessagePayload<T>) => {
 			switch (pkt.message.type) {
 				case PacketType.HandShake:
-					
 					const { nodeId } = pkt.message.data as HandShake;
 					this.neighbors.set(pkt.connectionId, pkt.connectionId);
 					this.emitter.emitConnect(nodeId.toString(), true);
@@ -158,8 +158,10 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
 				break;
 			case PacketType.Broadcast: {
 				for (const $nodeId of this.neighbors.keys()) {
-					this.send($nodeId, PacketType.Message, message);
-					this.messages.BROADCAST.set(message.data.id, message);
+					try {
+						this.send($nodeId, PacketType.Message, message);
+						this.messages.BROADCAST.set(message.data.id, message);
+					} catch (e) {}
 				}
 			}
 		}

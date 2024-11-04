@@ -56,7 +56,6 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
 		this.on("_message", async <T extends BroadcastData | DirectData>(pkt: OnMessagePayload<T>) => {
 			switch (pkt.message.type) {
 				case PacketType.HandShake:
-					
 					const { nodeId } = pkt.message.data as HandShake;
 					this.neighbors.set(pkt.connectionId, pkt.connectionId);
 					this.emitter.emitConnect(nodeId.toString(), true);

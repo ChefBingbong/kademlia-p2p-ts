@@ -1,3 +1,4 @@
+import { Peer } from "../peer/peer";
 import { MessageType, Transports } from "./types";
 
 export type MessageNode = {
@@ -8,7 +9,7 @@ export type MessageNode = {
 export type PayloadInfo = { recipient: number; sender: number };
 export type UDPDataInfo = {
 	resId: string;
-	closestNodes?: number[];
+	closestNodes?: Peer[];
 };
 export type MessagePayload<T> = {
 	description: string;

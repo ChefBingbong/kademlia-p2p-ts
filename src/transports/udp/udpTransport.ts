@@ -45,6 +45,7 @@ class UDPTransport extends AbstractTransport<dgram.Socket, BaseMessageType> {
 			const nodeResponse = new Promise<Peer[]>((resolve, reject) => {
 				const payload = JSON.stringify({ ...message });
 
+				
 				this.server.send(payload, message.to.port, this.address, () => {
 					const args = { type: message.type, data: message.data, responseId: message.data.data.resId };
 					callback(args, resolve, reject);

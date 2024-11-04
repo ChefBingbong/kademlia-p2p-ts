@@ -25,11 +25,11 @@ export class KBucket {
 	}
 
 	public removeNode = (nodeId: Peer) => {
-		this.nodes = this.nodes.filter((node: Peer) => node !== nodeId);
+		this.nodes = this.nodes.filter((node: Peer) => node.nodeId !== nodeId.nodeId);
 	};
 
 	public async updateBucketNode(nodeId: Peer) {
-		const current = this.nodes.find((node: Peer) => node === nodeId);
+		const current = this.nodes.find((node: Peer) => node.nodeId !== nodeId.nodeId);
 
 		if (current) {
 			this.moveToFront(current);
@@ -44,7 +44,7 @@ export class KBucket {
 		}
 		try {
 			// try check if node is only lone if not remove its id from the nodes arr
-			const payload = this.node.buildMessagePayload<UDPDataInfo>(MessageType.Ping, { resId: v4() }, this.nodes[0].port);
+			const payload = this.node.buildMessagePayload<UDPDataInfo>(MessageType.Ping, { resId: v4() }, this.nodes[0].nodeId);
 			const message = this.node.createUdpMessage<UDPDataInfo>(this.nodes[0], MessageType.Ping, payload);
 			await this.node.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(message, this.node.udpMessageResolver);
 		} catch (e) {

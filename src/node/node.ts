@@ -83,7 +83,7 @@ class KademliaNode extends AppLogger {
 
 	public async start() {
 		const clostest = getIdealDistance();
-		await this.table.updateTables(clostest);
+		await this.table.updateTables(new Peer(0, this.address, 3000));
 		await this.initDiscScheduler();
 	}
 
@@ -92,29 +92,29 @@ class KademliaNode extends AppLogger {
 			try {
 				await JobExecutor.addToQueue(`${this.discScheduler.jobId}-${this.port}`, async () => {
 					const closeNodes = await this.findNodes(this.nodeId);
-					// await this.table.updateTables(closeNodes);
+					await this.table.updateTables(closeNodes);
 
-					// const routingPeers = this.table.getAllPeers();
-					// const numBuckets = Object.values(this.table.getAllBuckets()).length;
+					const routingPeers = this.table.getAllPeers();
+					const numBuckets = Object.values(this.table.getAllBuckets()).length;
 
-					// const minPeers = Boolean(routingPeers.length >= BIT_SIZE * 2 - BIT_SIZE / 2);
-					// const isNteworkEstablished = Boolean(minPeers && numBuckets === BIT_SIZE);
+					const minPeers = Boolean(routingPeers.length >= BIT_SIZE * 2 - BIT_SIZE / 2);
+					const isNteworkEstablished = Boolean(minPeers && numBuckets === BIT_SIZE);
 
-					// if (this.discInitComplete) {
-					// 	if (isNteworkEstablished && this.discScheduler.schedule === Schedules.Fast) {
-					// 		await this.setDiscoveryInterval(Schedules.Slow);
-					// 	} else if (!isNteworkEstablished && this.discScheduler.schedule === Schedules.Slow) {
-					// 		await this.setDiscoveryInterval(Schedules.Fast);
-					// 	}
-					// }
+					if (this.discInitComplete) {
+						if (isNteworkEstablished && this.discScheduler.schedule === Schedules.Fast) {
+							await this.setDiscoveryInterval(Schedules.Slow);
+						} else if (!isNteworkEstablished && this.discScheduler.schedule === Schedules.Slow) {
+							await this.setDiscoveryInterval(Schedules.Fast);
+						}
+					}
 
-					// for (const closestNode of routingPeers) {
-					// 	if (!this.wsTransport.connections.has(closestNode.toString()) && this.nodeId !== closestNode.nodeId) {
-					// 		this.wsTransport.connect(closestNode.port, () => {
-					// 			console.log(`Connection from ${this.nodeId} to ${closestNode.port} established.`);
-					// 		});
-					// 	}
-					// }
+					for (const closestNode of routingPeers) {
+						if (!this.wsTransport.connections.has(closestNode.toString())) {
+							this.wsTransport.connect(closestNode.port, () => {
+								console.log(`Connection from ${this.nodeId} to ${closestNode.port} established.`);
+							});
+						}
+					}
 					this.discInitComplete = true;
 				});
 			} catch (error) {
@@ -143,7 +143,7 @@ class KademliaNode extends AppLogger {
 		let hasCloserThanExist = false;
 		try {
 			const closeNodes = await closeNodesResponse;
-			contactedNodes.set(nodeId.toString(), nodeId);
+			contactedNodes.set(nodeId.nodeId.toString(), nodeId);
 
 			for (const currentCloseNode of closeNodes) {
 				nodeShortlist.push(currentCloseNode);
@@ -181,8 +181,9 @@ class KademliaNode extends AppLogger {
 		const alphaContacts = nodeShortlist.slice(iteration * ALPHA, iteration * ALPHA + ALPHA);
 
 		for (const node of nodeShortlist) {
-			//need to test this with larger networks vs nodeshrtlost
-			if (contactedNodes.has(node.toString())) {
+      
+		
+			if (contactedNodes.has(node.nodeId.toString())) {
 				continue;
 			}
 			const payload = this.buildMessagePayload<UDPDataInfo>(MessageType.PeerDiscovery, { resId: v4() }, this.nodeId);
@@ -317,8 +318,6 @@ class KademliaNode extends AppLogger {
 		if (type === MessageType.Pong) resolve();
 
 		this.emitter.once(`response_${responseId}`, (data: any) => {
-			console.log(data);
-
 			if (data.error) {
 				return reject(data.error);
 			}

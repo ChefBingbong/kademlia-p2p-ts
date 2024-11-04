@@ -345,7 +345,6 @@ class KademliaNode extends AppLogger {
 		if (type === MessageType.Pong) resolve();
 
 		this.emitter.once(`response_${responseId}`, (data: any) => {
-      console.log(data);
 			if (data.error) {
 				return reject(data.error);
 			}

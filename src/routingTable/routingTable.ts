@@ -36,7 +36,7 @@ class RoutingTable {
 	};
 
 	public findBucket = (peer: Peer) => {
-		const bucketIndex = this.getBucketIndex(peer.lastSeen);
+		const bucketIndex = this.getBucketIndex(peer.nodeId);
 		const bucket = this.buckets.get(bucketIndex);
 
 		if (!bucket) {

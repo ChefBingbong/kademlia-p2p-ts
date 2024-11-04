@@ -97,13 +97,13 @@ class KademliaNode extends AppLogger {
 				const minPeers = Boolean(routingPeers.length >= BIT_SIZE * 2 - BIT_SIZE / 2);
 				const isNteworkEstablished = Boolean(minPeers && numBuckets === BIT_SIZE);
 
-				if (this.discInitComplete) {
-					if (isNteworkEstablished && this.discScheduler.schedule === Schedules.Fast) {
-						await this.setDiscoveryInterval(Schedules.Slow);
-					} else if (!isNteworkEstablished && this.discScheduler.schedule === Schedules.Slow) {
-						await this.setDiscoveryInterval(Schedules.Fast);
-					}
-				}
+				// if (this.discInitComplete) {
+				// 	if (isNteworkEstablished && this.discScheduler.schedule === Schedules.Fast) {
+				// 		await this.setDiscoveryInterval(Schedules.Slow);
+				// 	} else if (!isNteworkEstablished && this.discScheduler.schedule === Schedules.Slow) {
+				// 		await this.setDiscoveryInterval(Schedules.Fast);
+				// 	}
+				// }
 
 				for (const closestNode of routingPeers) {
 					if (!this.wsTransport.connections.has(closestNode.nodeId.toString()) && this.nodeId !== closestNode.nodeId) {
@@ -154,7 +154,6 @@ class KademliaNode extends AppLogger {
 			}
 		} catch (e) {
 			const errorMessage = extractError(e);
-			console.log(errorMessage);
 
 			if (errorMessage.includes("TIMEOUT")) {
 				const nodeId = extractNumber(errorMessage);

@@ -41,6 +41,8 @@ export class KBucket {
 	public async updateBucketNode(peer: Peer) {
 		const current = this.nodes.find((node) => node.nodeId === peer.nodeId);
 
+		peer.updateLastSeen?.();
+		
 		if (current) {
 			this.moveToFront(current);
 			return;

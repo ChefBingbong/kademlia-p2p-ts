@@ -50,6 +50,7 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
 
 		this.on("_disconnect", (connectionId) => {
 			this.neighbors.delete(connectionId);
+			this.connections.delete(connectionId);
 			this.emitter.emitDisconnect(connectionId, true);
 		});
 
@@ -157,8 +158,10 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
 				break;
 			case PacketType.Broadcast: {
 				for (const $nodeId of this.neighbors.keys()) {
-					this.send($nodeId, PacketType.Message, message);
-					this.messages.BROADCAST.set(message.data.id, message);
+					try {
+						this.send($nodeId, PacketType.Message, message);
+						this.messages.BROADCAST.set(message.data.id, message);
+					} catch (e) {}
 				}
 			}
 		}

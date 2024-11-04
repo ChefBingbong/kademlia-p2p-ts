@@ -97,21 +97,35 @@ class KademliaNode extends AppLogger {
 				const minPeers = Boolean(routingPeers.length >= BIT_SIZE * 2 - BIT_SIZE / 2);
 				const isNteworkEstablished = Boolean(minPeers && numBuckets === BIT_SIZE);
 
-				// if (this.discInitComplete) {
-				// 	if (isNteworkEstablished && this.discScheduler.schedule === Schedules.Fast) {
-				// 		await this.setDiscoveryInterval(Schedules.Slow);
-				// 	} else if (!isNteworkEstablished && this.discScheduler.schedule === Schedules.Slow) {
-				// 		await this.setDiscoveryInterval(Schedules.Fast);
-				// 	}
-				// }
-
+				if (this.discInitComplete) {
+					if (isNteworkEstablished && this.discScheduler.schedule === Schedules.Fast) {
+						await this.setDiscoveryInterval(Schedules.Slow);
+					} else if (!isNteworkEstablished && this.discScheduler.schedule === Schedules.Slow) {
+						await this.setDiscoveryInterval(Schedules.Fast);
+					}
+				}
 				for (const closestNode of routingPeers) {
-					if (!this.wsTransport.connections.has(closestNode.nodeId.toString()) && this.nodeId !== closestNode.nodeId) {
+					if (Date.now() > closestNode.lastSeen + 60000 && this.nodeId !== closestNode.nodeId) {
+						const connection = this.wsTransport.connections.get(closestNode.nodeId.toString());
+						if (connection) {
+							await connection.close();
+							this.wsTransport.connections.delete(closestNode.nodeId.toString());
+							this.wsTransport.neighbors.delete(closestNode.nodeId.toString());
+						}
+					}
+					if (!this.wsTransport.connections.has(closestNode.nodeId.toString())) {
 						this.wsTransport.connect(closestNode.port, () => {
 							console.log(`Connection from ${this.nodeId} to ${closestNode.port} established.`);
 						});
 					}
 				}
+
+				const u = [];
+				for (const x of this.wsTransport.connections.keys()) {
+					u.push(x);
+				}
+
+				// console.log(u.length, routingPeers.length);
 				this.discInitComplete = true;
 			} catch (error) {
 				this.log.error(`message: ${extractError(error)}, fn: executeCronTask`);
@@ -382,12 +396,15 @@ class KademliaNode extends AppLogger {
 	};
 
 	private handleTcpDisconnet = async (nodeId: number) => {
-		if (this.nodeId === nodeId) return;
-		const peer = new Peer(nodeId, this.address, nodeId + 3000);
-		const bucket = this.table.findBucket(peer);
-		bucket.removeNode(peer);
+				this.wsTransport.connections.delete(nodeId.toString());
+				this.wsTransport.neighbors.delete(nodeId.toString());
 
-		if (bucket.nodes.length === 0) this.table.removeBucket(peer);
+				if (this.nodeId === nodeId) return;
+				const peer = new Peer(nodeId, this.address, nodeId + 3000);
+				const bucket = this.table.findBucket(peer);
+				bucket.removeNode(peer);
+
+				if (bucket.nodes.length === 0) this.table.removeBucket(peer);
 	};
 
 	private setDiscoveryInterval = async (interval: string) => {

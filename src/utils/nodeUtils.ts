@@ -1,6 +1,7 @@
 import { BinaryLike, createHash } from "crypto";
 import * as Mathjs from "mathjs";
 import { BIT_SIZE, HASH_SIZE } from "../node/constants";
+import { Peer } from "../peer/peer";
 // * Create a mask with all bits set except MSB using bitwise operations
 // * Perform bitwise AND between key and mask for hashing
 export const HASH_BIT_SIZE = (key: number) => {
@@ -13,10 +14,10 @@ export const XOR = (n1: number, n2: number) => {
 };
 
 export function getIdealDistance() {
-	const IDEAL_DISTANCE: number[] = [];
+	const IDEAL_DISTANCE: Peer[] = [];
 	for (let i = 0; i < BIT_SIZE; i++) {
 		const val = 2 ** i;
-		IDEAL_DISTANCE.push(val);
+		IDEAL_DISTANCE.push(new Peer(val, "127.0.0.1", val + 3000));
 	}
 	return IDEAL_DISTANCE;
 }

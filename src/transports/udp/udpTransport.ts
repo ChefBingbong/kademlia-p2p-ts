@@ -1,6 +1,7 @@
 import dgram from "dgram";
 import { Message, MessagePayload, UDPDataInfo } from "../../message/message";
 import { MessageType } from "../../message/types";
+import { Peer } from "../../peer/peer";
 import { extractError } from "../../utils/extractError";
 import { timeoutReject } from "../../utils/nodeUtils";
 import AbstractTransport, { BaseMessageType } from "../abstractTransport/abstractTransport";
@@ -39,22 +40,21 @@ class UDPTransport extends AbstractTransport<dgram.Socket, BaseMessageType> {
 	public sendMessage = async <T extends MessagePayload<UDPDataInfo>>(
 		message: Message<T>,
 		callback?: (params: any, resolve: (value?: unknown) => void, reject: (reason?: any) => void) => void,
-	): Promise<number[] | undefined> => {
+	): Promise<Peer[] | undefined> => {
 		try {
-			const nodeResponse = new Promise<number[]>((resolve, reject) => {
+			const nodeResponse = new Promise<Peer[]>((resolve, reject) => {
 				const payload = JSON.stringify({ ...message });
-				const recipient = Number(message.to.address);
 
-				this.server.send(payload, recipient, this.address, () => {
+				this.server.send(payload, message.to.port, this.address, () => {
 					const args = { type: message.type, data: message.data, responseId: message.data.data.resId };
 					callback(args, resolve, reject);
 				});
 			});
-			const error = new Error(`TIMEOUT: ${Number(message.to.address)}`);
-			return Promise.race([nodeResponse, timeoutReject<number[]>(error)]);
+			const error = new Error(`TIMEOUT: ${Number(message.to.port)}`);
+			return Promise.race([nodeResponse, timeoutReject<Peer[]>(error)]);
 		} catch (error) {
 			console.error(`message: ${extractError(error)}, fn: sendMessage UDPTransport`);
-			return [] as number[];
+			return [] as Peer[];
 		}
 	};
 

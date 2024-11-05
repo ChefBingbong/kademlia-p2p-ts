@@ -13,7 +13,7 @@ import WebSocketTransport from "../transports/tcp/wsTransport";
 import { BroadcastData, DirectData, TcpPacket } from "../transports/types";
 import UDPTransport from "../transports/udp/udpTransport";
 import { extractError } from "../utils/extractError";
-import { extractNumber, getIdealDistance } from "../utils/nodeUtils";
+import { chunk, extractNumber, getIdealDistance } from "../utils/nodeUtils";
 import { ALPHA, BIT_SIZE } from "./constants";
 import { P2PNetworkEventEmitter } from "./eventEmitter";
 
@@ -211,6 +211,53 @@ class KademliaNode extends AppLogger {
 			await this.findNodeRecursiveSearch(contactedNodes, nodeShortlist, initialClosestNode, iteration);
 		}
 	};
+
+	public async store(key: string, block: string) {
+		const closestNodes = await this.findNodes(this.nodeContact.nodeId);
+		const closestNodesChunked = chunk(closestNodes, ALPHA);
+
+		for (const nodes of closestNodesChunked) {
+			try {
+				const promises = nodes.map((node) => {
+					// this.node.callRPC("STORE", node, {
+					// 	data: {
+					// 		key,
+					// 		block,
+					// 	},
+					// }),
+				});
+
+				await Promise.all(promises);
+			} catch (e) {
+				console.error(e);
+			}
+		}
+	}
+
+	public async findValue(key: string) {
+		const closestNodes = await this.findNodes(this.nodeContact.nodeId);
+		const closestNodesChunked = chunk<any>(closestNodes, ALPHA);
+
+		for (const nodes of closestNodesChunked) {
+			try {
+				const promises = nodes.map((node) => {
+					// this.node.callRPC("FIND_VALUE", node, {
+					// 	data: {
+					// 		key,
+					// 	},
+					// }),
+				});
+
+				for await (const result of promises) {
+					if (typeof result === "string") {
+						return result;
+					}
+				}
+			} catch (e) {
+				console.error(e);
+			}
+		}
+	}
 
 	public getTransportMessages = (transport: Transports, type: MessageType) => {
 		switch (transport) {

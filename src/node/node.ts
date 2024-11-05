@@ -13,7 +13,7 @@ import UDPTransport from "../transports/udp/udpTransport";
 import { MessageType, PacketType, Transports } from "../types/messageTypes";
 import { BroadcastData, DirectData, TcpPacket } from "../types/udpTransportTypes";
 import { extractError } from "../utils/extractError";
-import { chunk, extractNumber, getIdealDistance, hashKeyAndmapToKeyspace } from "../utils/nodeUtils";
+import { chunk, extractNumber, getIdealDistance } from "../utils/nodeUtils";
 import { ALPHA, BIT_SIZE } from "./constants";
 import { P2PNetworkEventEmitter } from "./eventEmitter";
 
@@ -212,7 +212,7 @@ class KademliaNode extends AppLogger {
 		}
 	};
 
-	public async store(key: string, block: string) {
+	public async store(key: number, block: string) {
 		const closestNodes = await this.findNodes(this.nodeId);
 		const closestNodesChunked = chunk<Peer>(closestNodes, ALPHA);
 
@@ -222,7 +222,7 @@ class KademliaNode extends AppLogger {
 					const recipient = new Peer(node.nodeId, this.address, node.port);
 					const payload = this.buildMessagePayload<UDPDataInfo & { key: number; block: string }>(
 						MessageType.Store,
-						{ resId: v4(), key: hashKeyAndmapToKeyspace(key), block },
+						{ resId: v4(), key: key, block },
 						node.nodeId,
 					);
 					const message = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.Store, payload);
@@ -236,7 +236,7 @@ class KademliaNode extends AppLogger {
 		}
 	}
 
-	public async findValue(key: string) {
+	public async findValue(key: number) {
 		const closestNodes = await this.findNodes(Number(key));
 		const closestNodesChunked = chunk<Peer>(closestNodes, ALPHA);
 
@@ -246,7 +246,7 @@ class KademliaNode extends AppLogger {
 					const recipient = new Peer(node.nodeId, this.address, node.port);
 					const payload = this.buildMessagePayload<UDPDataInfo & { key: number }>(
 						MessageType.FindValue,
-						{ resId: v4(), key: hashKeyAndmapToKeyspace(key) },
+						{ resId: v4(), key },
 						node.nodeId,
 					);
 					const message = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.FindValue, payload);

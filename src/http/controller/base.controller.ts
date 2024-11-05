@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import KademliaNode from "../../node/node";
 import { MessageType, Transports } from "../../types/messageTypes";
 import { BroadcastData, DirectData } from "../../types/udpTransportTypes";
+import { hashKeyAndmapToKeyspace } from "../../utils/nodeUtils";
 
 class BaseController {
 	public node: KademliaNode;
@@ -71,6 +72,27 @@ class BaseController {
 		try {
 			console.log(req.params.id);
 			const closest = this.node.table.findClosestNode(Number(req.params.id));
+			return res.json({ result: closest });
+		} catch (error) {
+			next(error);
+		}
+	};
+
+	public storeValue = async (req: Request, res: Response, next: NextFunction) => {
+		try {
+			const value = "test";
+			const key = hashKeyAndmapToKeyspace(value);
+			const closest = await this.node.store(key, value);
+			return res.json({ result: closest, key });
+		} catch (error) {
+			next(error);
+		}
+	};
+
+	public findValue = async (req: Request, res: Response, next: NextFunction) => {
+		try {
+			const key = hashKeyAndmapToKeyspace(req.params.key);
+			const closest = await this.node.findValue(key);
 			return res.json({ result: closest });
 		} catch (error) {
 			next(error);

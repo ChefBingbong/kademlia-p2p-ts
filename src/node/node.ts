@@ -13,7 +13,7 @@ import UDPTransport from "../transports/udp/udpTransport";
 import { MessageType, PacketType, Transports } from "../types/messageTypes";
 import { BroadcastData, DirectData, TcpPacket } from "../types/udpTransportTypes";
 import { extractError } from "../utils/extractError";
-import { chunk, extractNumber, getIdealDistance } from "../utils/nodeUtils";
+import { chunk, extractNumber, getIdealDistance, hashKeyAndmapToKeyspace } from "../utils/nodeUtils";
 import { ALPHA, BIT_SIZE } from "./constants";
 import { P2PNetworkEventEmitter } from "./eventEmitter";
 
@@ -213,18 +213,20 @@ class KademliaNode extends AppLogger {
 	};
 
 	public async store(key: string, block: string) {
-		const closestNodes = await this.findNodes(this.nodeContact.nodeId);
-		const closestNodesChunked = chunk(closestNodes, ALPHA);
+		const closestNodes = await this.findNodes(this.nodeId);
+		const closestNodesChunked = chunk<Peer>(closestNodes, ALPHA);
 
 		for (const nodes of closestNodesChunked) {
 			try {
 				const promises = nodes.map((node) => {
-					// this.node.callRPC("STORE", node, {
-					// 	data: {
-					// 		key,
-					// 		block,
-					// 	},
-					// }),
+					const recipient = new Peer(node.nodeId, this.address, node.port);
+					const payload = this.buildMessagePayload<UDPDataInfo & { key: number; block: string }>(
+						MessageType.Store,
+						{ resId: v4(), key: hashKeyAndmapToKeyspace(key), block },
+						node.nodeId,
+					);
+					const message = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.Store, payload);
+					return this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(message, this.udpMessageResolver);
 				});
 
 				await Promise.all(promises);
@@ -235,23 +237,26 @@ class KademliaNode extends AppLogger {
 	}
 
 	public async findValue(key: string) {
-		const closestNodes = await this.findNodes(this.nodeContact.nodeId);
-		const closestNodesChunked = chunk<any>(closestNodes, ALPHA);
+		const closestNodes = await this.findNodes(Number(key));
+		const closestNodesChunked = chunk<Peer>(closestNodes, ALPHA);
 
 		for (const nodes of closestNodesChunked) {
 			try {
 				const promises = nodes.map((node) => {
-					// this.node.callRPC("FIND_VALUE", node, {
-					// 	data: {
-					// 		key,
-					// 	},
-					// }),
+					const recipient = new Peer(node.nodeId, this.address, node.port);
+					const payload = this.buildMessagePayload<UDPDataInfo & { key: number }>(
+						MessageType.FindValue,
+						{ resId: v4(), key: hashKeyAndmapToKeyspace(key) },
+						node.nodeId,
+					);
+					const message = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.FindValue, payload);
+					return this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(message, this.udpMessageResolver);
 				});
 
 				for await (const result of promises) {
-					if (typeof result === "string") {
-						return result;
-					}
+					// if (typeof result === "string") {
+					return result;
+					// }
 				}
 			} catch (e) {
 				console.error(e);

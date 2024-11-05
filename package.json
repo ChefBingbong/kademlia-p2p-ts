@@ -10,7 +10,8 @@
 		"start:dev": "npx ts-node src/simulation.ts",
 		"format:check:staged": "lint-staged",
 		"format:check": "biome format .",
-		"format:write": "biome format . --write"
+		"format:write": "biome format . --write",
+		"prepare": "husky install"
 	},
 	"keywords": [],
 	"author": "",

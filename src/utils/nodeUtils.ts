@@ -1,13 +1,7 @@
-import { BinaryLike, createHash } from "crypto";
+import crypto, { BinaryLike, createHash } from "crypto";
 import * as Mathjs from "mathjs";
 import { BIT_SIZE, HASH_SIZE } from "../node/constants";
 import { Peer } from "../peer/peer";
-// * Create a mask with all bits set except MSB using bitwise operations
-// * Perform bitwise AND between key and mask for hashing
-export const HASH_BIT_SIZE = (key: number) => {
-	const mask: number = (1 << (2 ** BIT_SIZE - 1)) - 1;
-	return key & mask;
-};
 
 export const XOR = (n1: number, n2: number) => {
 	return Mathjs.bitXor(Mathjs.bignumber(n1), Mathjs.bignumber(n2)).toNumber();
@@ -113,4 +107,13 @@ export const extractNumber = (message: string) => {
 	const regex = /(\d+)/;
 	const match = message.match(regex);
 	return match ? parseInt(match[0], 10) - 3000 : null;
+};
+
+export const generateHash = (data: string) => {
+	return crypto.createHash("sha1").update(data).digest("hex");
+};
+
+export const hashKeyAndmapToKeyspace = (data: string) => {
+	const hash = generateHash(data).substring(0, 8);
+	return parseInt(hash, 16) % HASH_SIZE;
 };

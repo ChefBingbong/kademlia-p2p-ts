@@ -102,7 +102,11 @@ then in order to start the serice export a default env for the boostrap node 300
 ```
 export PORT=3000
 nvm use 18.20.0
-pnpm start
+pnpm start // for single node (prod script)
+
+// or
+
+pnpm run start:dev // to run 16 nodes concurrently (dev script)
 ```
 You can then observe the peer doscvery process and begin to interact with each nodes HTTP API for getting node information and sending messages
 

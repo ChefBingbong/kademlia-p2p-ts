@@ -332,23 +332,58 @@ class KademliaNode extends AppLogger {
 					await this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(payload, this.udpMessageResolver);
 					break;
 				}
-				case MessageType.FindValue:
-					const result = await this.table.findValue(message.data.data.resId);
-					// TO-D-
-					break;
 				case MessageType.Pong:
-					// TO-DO
+					const resId = message.data.data.resId;
+					this.emitter.emit(`response_${resId}`, { error: null });
+					break;
+				case MessageType.FindValue:
+					const result = await this.table.findValue(message.data.data.key);
+					if (Array.isArray(result)) {
+						const recipient = {
+							address: message.from.address,
+							nodeId: message.from.nodeId,
+						};
+						const msgPayload = this.buildMessagePayload<UDPDataInfo & { key: string; block: string }>(
+							MessageType.Reply,
+							{
+								resId: message.data.data.resId,
+								key: message.data.data?.key,
+								block: message.data.data?.block,
+								closestNodes: result,
+							},
+							externalContact,
+						);
+						const msg = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.Reply, msgPayload);
+						await this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(msg, this.udpMessageResolver);
+						console.log("array, value", message);
+					} else {
+						const recipient = {
+							address: message.from.address,
+							nodeId: message.from.nodeId,
+						};
+						const msgPayload = this.buildMessagePayload<UDPDataInfo & { key: string; block: string }>(
+							MessageType.Reply,
+							{
+								resId: message.data.data.resId,
+								key: message.data.data?.key,
+								block: result,
+							},
+							externalContact,
+						);
+						const msg = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.Reply, msgPayload);
+						await this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(msg, this.udpMessageResolver);
+					}
+
 					break;
 				case MessageType.Store:
-					await this.table.nodeStore<MessagePayload<UDPDataInfo>>(message, info);
-					const recip = Peer.fromJSON(
-						message.from.nodeId,
-						message.from.address,
-						message.from.port,
-						message.from.lastSeen,
-					);
+					await this.table.nodeStore<MessagePayload<UDPDataInfo & { key?: string; block?: string }>>(message, info);
+					const recip = {
+						address: message.from.address,
+						nodeId: message.from.nodeId,
+					};
+
 					const msgPayload = this.buildMessagePayload<UDPDataInfo>(
-						MessageType.PeerDiscovery,
+						MessageType.Reply,
 						{ resId: message.data.data.resId },
 						externalContact,
 					);

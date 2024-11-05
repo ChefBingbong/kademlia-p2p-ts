@@ -11,6 +11,7 @@
 		"format:check:staged": "lint-staged",
 		"format:check": "biome format .",
 		"format:write": "biome format . --write",
+		"lint": "biome lint .",
 		"prepare": "husky install",
 		"test": "vitest run --pool=forks"
 	},

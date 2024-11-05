@@ -38,10 +38,9 @@ export class ErrorWithCode extends Error {
 				error.message = `${errorPrefix}: ${extractError(error)}`;
 			}
 			return error as ErrorWithCode;
-		} else {
+		}
 			const message = extractError(error);
 			return new ErrorWithCode(errorPrefix && message ? `${errorPrefix}: ${message}}` : errorPrefix || message, code);
-		}
 	};
 
 	public constructor(message: unknown, code: string, prefix?: string) {

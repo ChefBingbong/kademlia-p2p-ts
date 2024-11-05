@@ -15,7 +15,7 @@ class RoutingTable {
 	public readonly tableId: number;
 	public readonly node: KademliaNode;
 
-	private readonly store: Map<string, string>;
+	private readonly store: Map<number, string>;
 
 	constructor(tableId: number, node: KademliaNode) {
 		this.tableId = tableId;
@@ -171,13 +171,12 @@ class RoutingTable {
 	};
 
 	public nodeStore = <T extends MessagePayload<UDPDataInfo>>(key: string, value: string) => {
-		this.store.set(key, value);
+		this.store.set(Number(key), value);
 	};
 
 	public findValue = async (key: string): Promise<string | Peer[]> => {
-		console.log(key, this.store.get(key));
-		if (this.store.has(key)) {
-			return this.store.get(key);
+		if (this.store.has(Number(key.toString()))) {
+			return this.store.get(Number(key.toString()));
 		}
 
 		return this.findNode(Number(key), ALPHA);

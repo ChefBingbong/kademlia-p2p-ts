@@ -13,7 +13,7 @@ import UDPTransport from "../transports/udp/udpTransport";
 import { MessageType, PacketType, Transports } from "../types/messageTypes";
 import { BroadcastData, DirectData, TcpPacket } from "../types/udpTransportTypes";
 import { extractError } from "../utils/extractError";
-import { chunk, extractNumber, getIdealDistance } from "../utils/nodeUtils";
+import { chunk, extractNumber, getIdealDistance, hashKeyAndmapToKeyspace } from "../utils/nodeUtils";
 import { ALPHA, BIT_SIZE } from "./constants";
 import { P2PNetworkEventEmitter } from "./eventEmitter";
 
@@ -236,17 +236,18 @@ class KademliaNode extends AppLogger {
 		}
 	}
 
-	public async findValue(key: number) {
-		const closestNodes = await this.findNodes(Number(key));
+	public async findValue(value: string) {
+		const key = hashKeyAndmapToKeyspace(value);
+		const closestNodes = await this.findNodes(key);
 		const closestNodesChunked = chunk<Peer>(closestNodes, ALPHA);
 
 		for (const nodes of closestNodesChunked) {
 			try {
 				const promises = nodes.map((node) => {
 					const recipient = new Peer(node.nodeId, this.address, node.port);
-					const payload = this.buildMessagePayload<UDPDataInfo & { key: number }>(
+					const payload = this.buildMessagePayload<UDPDataInfo & { key: number; block: string }>(
 						MessageType.FindValue,
-						{ resId: v4(), key },
+						{ resId: v4(), key, block: value, closestNodes },
 						node.nodeId,
 					);
 					const message = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.FindValue, payload);
@@ -313,7 +314,7 @@ class KademliaNode extends AppLogger {
 					const block = message.data.data?.block;
 					const resId = message.data.data.resId;
 
-					if (block) this.emitter.emit(`response_reply2_${resId}`, { closestNodes, key, block, error: null });
+					if (block) this.emitter.emit(`response_reply2_${resId}`, { block, error: null });
 					this.emitter.emit(`response_reply_${resId}`, { closestNodes, key, block, error: null });
 					break;
 				}
@@ -357,7 +358,7 @@ class KademliaNode extends AppLogger {
 								resId: message.data.data.resId,
 								key: message.data.data?.key,
 								block: message.data.data?.block,
-								closestNodes: message.data.data?.closestNodes,
+								closestNodes: message.data.data.closestNodes,
 							},
 							externalContact,
 						);
@@ -376,7 +377,7 @@ class KademliaNode extends AppLogger {
 								resId: message.data.data.resId,
 								key: message.data.data?.key,
 								block: message.data.data?.block,
-								closestNodes: message.data.data?.closestNodes,
+								closestNodes: message.data.data.closestNodes,
 							},
 							externalContact,
 						);

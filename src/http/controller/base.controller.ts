@@ -90,8 +90,7 @@ class BaseController {
 
 	public findValue = async (req: Request, res: Response, next: NextFunction) => {
 		try {
-			const key = hashKeyAndmapToKeyspace(req.params.key);
-			const closest = await this.node.findValue(key);
+			const closest = await this.node.findValue(req.params.key);
 			return res.json({ result: closest });
 		} catch (error) {
 			next(error);

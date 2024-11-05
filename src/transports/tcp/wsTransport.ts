@@ -1,4 +1,4 @@
-import { Server, WebSocket } from "ws";
+import { Server, WebSocket, WebSocketServer } from "ws";
 import { Message } from "../../message/message";
 import { Listener, P2PNetworkEventEmitter } from "../../node/eventEmitter";
 import { MessageType, PacketType } from "../../types/messageTypes";
@@ -24,7 +24,7 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
 	private isInitialized: boolean = false;
 
 	constructor(nodeId: number, port: number) {
-		super(nodeId, port, new WebSocket.Server({ port }));
+		super(nodeId, port, new WebSocketServer({ port }));
 		this.connections = new Map();
 		this.neighbors = new Map();
 

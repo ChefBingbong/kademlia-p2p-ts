@@ -3,15 +3,16 @@
 	"version": "1.0.0",
 	"description": "",
 	"main": "index.js",
+	"type": "commonjs",
 	"packageManager": "pnpm@9.8.0",
 	"scripts": {
-		"test": "echo \"Error: no test specified\" && exit 1",
 		"start": "npx ts-node src/index.ts",
 		"start:dev": "npx ts-node src/simulation.ts",
 		"format:check:staged": "lint-staged",
 		"format:check": "biome format .",
 		"format:write": "biome format . --write",
-		"prepare": "husky install"
+		"prepare": "husky install",
+		"test": "vitest run --pool=forks"
 	},
 	"keywords": [],
 	"author": "",
@@ -37,6 +38,8 @@
 		"nodemon": "^3.0.1",
 		"ts-node": "^10.9.1",
 		"uuid": "^10.0.0",
+		"vite-tsconfig-paths": "^5.1.0",
+		"vitest": "^1.4.0",
 		"winston": "^3.9.0",
 		"winston-transport": "^4.7.1",
 		"ws": "^8.18.0",

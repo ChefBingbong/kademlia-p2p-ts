@@ -8,6 +8,7 @@
 		"test": "echo \"Error: no test specified\" && exit 1",
 		"start": "npx ts-node src/index.ts",
 		"start:dev": "npx ts-node src/simulation.ts",
+		"format:check:staged": "lint-staged",
 		"format:check": "biome format .",
 		"format:write": "biome format . --write"
 	},

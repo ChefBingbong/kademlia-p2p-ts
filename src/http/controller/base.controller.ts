@@ -10,7 +10,7 @@ class BaseController {
 		this.node = node;
 	}
 	public ping = async (req: Request, res: Response, next: NextFunction) => {
-		return res.json({ message: "success" });
+		return res.json({ message: "succes" });
 	};
 
 	public getNodeBuckets = async (req: Request, res: Response, next: NextFunction) => {

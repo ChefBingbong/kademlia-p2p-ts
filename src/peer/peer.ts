@@ -1,3 +1,10 @@
+export type PeerJSON = {
+	nodeId: number;
+	address: string;
+	port: number;
+	lastSeen: number;
+};
+
 export class Peer {
 	public readonly nodeId: number;
 	public readonly address: string;
@@ -5,24 +12,27 @@ export class Peer {
 
 	public lastSeen: number;
 
-	constructor(nodeId: number, address: string, port: number) {
+	constructor(nodeId: number, address: string, port: number, lastSeen?: number) {
 		this.nodeId = nodeId;
 		this.port = port;
 		this.address = address;
-		this.lastSeen = Date.now();
+		this.lastSeen = lastSeen ?? Date.now();
 	}
 
 	public updateLastSeen = () => {
 		this.lastSeen = Date.now();
 	};
 
-	public fromJSON = () => new Peer(this.nodeId, this.address, this.port);
+	public static fromJSON = (nodeId: number, address: string, port: number, lastSeen: number): Peer => {
+		return new Peer(nodeId, address, port, lastSeen);
+	};
 
-	public toJSON = () => {
+	public toJSON = (): PeerJSON => {
 		return {
 			nodeId: this.nodeId,
 			address: this.address,
 			port: this.port,
+			lastSeen: this.lastSeen,
 		};
 	};
 }

@@ -5,9 +5,9 @@ import { WebSocket } from "ws";
 import { DiscoveryScheduler, Schedules } from "../discoveryScheduler/discoveryScheduler";
 import { App } from "../http/app";
 import { AppLogger } from "../logging/logger";
-import { Message, MessageNode, MessagePayload, UDPDataInfo } from "../message/message";
+import { Message, MessagePayload, UDPDataInfo } from "../message/message";
 import { MessageType, PacketType, Transports } from "../message/types";
-import { Peer } from "../peer/peer";
+import { Peer, PeerJSON } from "../peer/peer";
 import RoutingTable from "../routingTable/routingTable";
 import WebSocketTransport from "../transports/tcp/wsTransport";
 import { BroadcastData, DirectData, TcpPacket } from "../transports/types";
@@ -120,12 +120,6 @@ class KademliaNode extends AppLogger {
 					}
 				}
 
-				const u = [];
-				for (const x of this.wsTransport.connections.keys()) {
-					u.push(x);
-				}
-
-				// console.log(u.length, routingPeers.length);
 				this.discInitComplete = true;
 			} catch (error) {
 				this.log.error(`message: ${extractError(error)}, fn: executeCronTask`);
@@ -168,7 +162,7 @@ class KademliaNode extends AppLogger {
 			}
 		} catch (e) {
 			const errorMessage = extractError(e);
-
+			console.log(errorMessage);
 			if (errorMessage.includes("TIMEOUT")) {
 				const nodeId = extractNumber(errorMessage);
 				this.handleTcpDisconnet(nodeId);
@@ -189,13 +183,13 @@ class KademliaNode extends AppLogger {
 		iteration = iteration == null ? 0 : iteration + 1;
 		const alphaContacts = nodeShortlist.slice(iteration * ALPHA, iteration * ALPHA + ALPHA);
 
-		for (const node of nodeShortlist) {
+		for (const node of alphaContacts) {
 			//need to test this with larger networks vs nodeshrtlost
 			if (contactedNodes.has(node.toString())) {
 				continue;
 			}
-			const recipient = { address: node.port.toString(), nodeId: node.nodeId };
-			const payload = this.buildMessagePayload<UDPDataInfo>(MessageType.PeerDiscovery, { resId: v4() }, this.nodeId);
+			const recipient = node.toJSON();
+			const payload = this.buildMessagePayload<UDPDataInfo>(MessageType.PeerDiscovery, { resId: v4() }, recipient.nodeId);
 			const message = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.FindNode, payload);
 
 			// console.log(message);
@@ -233,20 +227,14 @@ class KademliaNode extends AppLogger {
 		switch (type) {
 			case MessageType.DirectMessage: {
 				const packet = this.buildPacket<T>(type, payload);
-				const recipient = {
-					address: packet.destination,
-					nodeId: Number(packet.message.to) - 3000,
-				};
-				const message = this.createTcpMessage<T>(recipient, MessageType.DirectMessage, packet);
+				const recipient = new Peer(Number(packet.message.to) - 3000, this.address, Number(packet.destination));
+				const message = this.createTcpMessage<T>(recipient, MessageType.DirectMessage, payload);
 				this.wsTransport.sendMessage<T>(message);
 				break;
 			}
 			case MessageType.Braodcast: {
 				const packet = this.buildPacket<T>(type, payload);
-				const recipient = {
-					address: packet.destination,
-					nodeId: Number(packet.message.to) - 3000,
-				};
+				const recipient = new Peer(Number(packet.message.to) - 3000, this.address, Number(packet.destination));
 				const message = this.createTcpMessage<T>(recipient, MessageType.Braodcast, packet);
 				this.wsTransport.sendMessage<T>(message);
 				break;
@@ -275,12 +263,14 @@ class KademliaNode extends AppLogger {
 				case MessageType.FindNode: {
 					const closestNodes = this.table.findNode(externalContact);
 					const data = { resId: message.data.data.resId, closestNodes };
-					const recipient = {
-						address: message.from.address,
-						nodeId: message.from.nodeId,
-					};
-
 					this.udpTransport.messages.FIND_NODE.set(message.data.data.resId, message);
+
+					const recipient = Peer.fromJSON(
+						message.from.nodeId,
+						message.from.address,
+						message.from.port,
+						message.from.lastSeen,
+					);
 					const messagePayload = this.buildMessagePayload<UDPDataInfo>(
 						MessageType.PeerDiscovery,
 						data,
@@ -299,11 +289,12 @@ class KademliaNode extends AppLogger {
 					break;
 				case MessageType.Store:
 					await this.table.nodeStore<MessagePayload<UDPDataInfo>>(message, info);
-					const recip = {
-						address: message.from.address,
-						nodeId: message.from.nodeId,
-					};
-
+					const recip = Peer.fromJSON(
+						message.from.nodeId,
+						message.from.address,
+						message.from.port,
+						message.from.lastSeen,
+					);
 					const msgPayload = this.buildMessagePayload<UDPDataInfo>(
 						MessageType.PeerDiscovery,
 						{ resId: message.data.data.resId },
@@ -313,10 +304,12 @@ class KademliaNode extends AppLogger {
 					await this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(msg, this.udpMessageResolver);
 					break;
 				case MessageType.Ping:
-					const recipient = {
-						address: message.from.address,
-						nodeId: message.from.nodeId,
-					};
+					const recipient = Peer.fromJSON(
+						message.from.nodeId,
+						message.from.address,
+						message.from.port,
+						message.from.lastSeen,
+					);
 					this.udpTransport.messages.PING.set(message.data.data.resId, message);
 
 					const messagePayload = this.buildMessagePayload<UDPDataInfo>(
@@ -346,7 +339,8 @@ class KademliaNode extends AppLogger {
 			if (data.error) {
 				return reject(data.error);
 			}
-			resolve(data.closestNodes);
+			const nodes = data.closestNodes.map((n: PeerJSON) => Peer.fromJSON(n.nodeId, this.address, n.port, n.lastSeen));
+			resolve(nodes);
 		});
 	};
 
@@ -358,18 +352,15 @@ class KademliaNode extends AppLogger {
 		console.log(`recieving direct message: ${this.port}`);
 	};
 
-	public createUdpMessage = <T>(to: MessageNode, type: MessageType, data: MessagePayload<T>) => {
-		const { address: toPort, nodeId: toNodeId } = to;
-		return Message.create<MessagePayload<T>>(this.port.toString(), toPort, this.nodeId, toNodeId, Transports.Udp, data, type);
+	public createUdpMessage = <T>(to: PeerJSON, type: MessageType, data: MessagePayload<T>) => {
+		const from = this.nodeContact.toJSON();
+		return Message.create<MessagePayload<T>>(to, from, Transports.Udp, data, type);
 	};
 
-	protected createTcpMessage = <T extends BroadcastData | DirectData>(
-		to: MessageNode,
-		type: MessageType,
-		data: TcpPacket<T>,
-	) => {
-		const { address: toPort, nodeId: toNodeId } = to;
-		return Message.create<TcpPacket<T>>(this.port.toString(), toPort, this.nodeId, toNodeId, Transports.Tcp, data, type);
+	protected createTcpMessage = <T extends BroadcastData | DirectData>(to: PeerJSON, type: MessageType, payload: any) => {
+		const from = this.nodeContact.toJSON();
+		const packet = this.buildPacket<T>(type, payload);
+		return Message.create<TcpPacket<T>>(to, from, Transports.Tcp, packet, type);
 	};
 
 	public buildMessagePayload = <T extends UDPDataInfo>(type: MessageType, data: T, recipient: number): MessagePayload<T> => {
@@ -395,16 +386,16 @@ class KademliaNode extends AppLogger {
 		};
 	};
 
-	private handleTcpDisconnet = async (nodeId: number) => {
-				this.wsTransport.connections.delete(nodeId.toString());
-				this.wsTransport.neighbors.delete(nodeId.toString());
+	public handleTcpDisconnet = async (nodeId: number) => {
+		this.wsTransport.connections.delete(nodeId.toString());
+		this.wsTransport.neighbors.delete(nodeId.toString());
 
-				if (this.nodeId === nodeId) return;
-				const peer = new Peer(nodeId, this.address, nodeId + 3000);
-				const bucket = this.table.findBucket(peer);
-				bucket.removeNode(peer);
+		if (this.nodeId === nodeId) return;
+		const peer = new Peer(nodeId, this.address, nodeId + 3000);
+		const bucket = this.table.findBucket(peer);
+		bucket.removeNode(peer);
 
-				if (bucket.nodes.length === 0) this.table.removeBucket(peer);
+		if (bucket.nodes.length === 0) this.table.removeBucket(peer);
 	};
 
 	private setDiscoveryInterval = async (interval: string) => {

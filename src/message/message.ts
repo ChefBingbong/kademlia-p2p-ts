@@ -1,4 +1,4 @@
-import { Peer } from "../peer/peer";
+import { Peer, PeerJSON } from "../peer/peer";
 import { MessageType, Transports } from "./types";
 
 export type MessageNode = {
@@ -18,44 +18,22 @@ export type MessagePayload<T> = {
 };
 
 export class Message<T> {
-	public readonly from: MessageNode;
-	public readonly to: MessageNode;
+	public readonly from: PeerJSON;
+	public readonly to: PeerJSON;
 	public readonly protocol: Transports;
 	public readonly data: T;
 	public readonly type: MessageType;
 
-	constructor(
-		fromPort: string,
-		toPort: string,
-		fromNodeId: number,
-		toNodId: number,
-		protocol: Transports,
-		data: T,
-		type: MessageType,
-	) {
-		this.from = {
-			address: fromPort,
-			nodeId: fromNodeId,
-		};
-		this.to = {
-			address: toPort,
-			nodeId: toNodId,
-		};
+	constructor(to: PeerJSON, from: PeerJSON, protocol: Transports, data: T, type: MessageType) {
+		this.from = from;
+		this.to = to;
 		this.protocol = protocol;
 		this.data = data;
 		this.type = type;
 	}
 
-	static create<T>(
-		fromPort: string,
-		toPort: string,
-		fromNodeId: number,
-		toNodId: number,
-		protocol: Transports,
-		data: T,
-		type: MessageType,
-	): Message<T> {
-		const msg = new Message<T>(fromPort, toPort, fromNodeId, toNodId, protocol, data, type);
+	static create<T>(to: PeerJSON, from: PeerJSON, protocol: Transports, data: T, type: MessageType): Message<T> {
+		const msg = new Message<T>(to, from, protocol, data, type);
 		Object.freeze(msg);
 		return msg;
 	}

@@ -41,7 +41,7 @@ export class KBucket {
 	public async updateBucketNode(peer: Peer) {
 		const current = this.nodes.find((node) => node.nodeId === peer.nodeId);
 
-		peer.updateLastSeen?.();
+		peer.updateLastSeen();
 		
 		if (current) {
 			this.moveToFront(current);
@@ -56,10 +56,7 @@ export class KBucket {
 		}
 		try {
 			// try check if node is only lone if not remove its id from the nodes arr
-			const recipient = {
-				address: this.nodes[0].port.toString(),
-				nodeId: this.nodes[0].nodeId,
-			};
+			const recipient = this.nodes[0].toJSON();
 			const payload = this.node.buildMessagePayload<UDPDataInfo>(MessageType.Ping, { resId: v4() }, this.nodes[0].nodeId);
 			const message = this.node.createUdpMessage<UDPDataInfo>(recipient, MessageType.Ping, payload);
 			await this.node.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(message, this.node.udpMessageResolver);

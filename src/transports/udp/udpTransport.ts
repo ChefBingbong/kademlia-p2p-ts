@@ -44,14 +44,13 @@ class UDPTransport extends AbstractTransport<dgram.Socket, BaseMessageType> {
 		try {
 			const nodeResponse = new Promise<Peer[]>((resolve, reject) => {
 				const payload = JSON.stringify({ ...message });
-				const recipient = Number(message.to.address);
 
-				this.server.send(payload, recipient, this.address, () => {
+				this.server.send(payload, message.to.port, this.address, () => {
 					const args = { type: message.type, data: message.data, responseId: message.data.data.resId };
 					callback(args, resolve, reject);
 				});
 			});
-			const error = new Error(`TIMEOUT: ${Number(message.to.address)}`);
+			const error = new Error(`TIMEOUT: ${message.to.port}`);
 			return Promise.race([nodeResponse, timeoutReject<Peer[]>(error)]);
 		} catch (error) {
 			console.error(`message: ${extractError(error)}, fn: sendMessage UDPTransport`);

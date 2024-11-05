@@ -14,8 +14,8 @@
 		"prepare": "husky install",
 		"test": "vitest run --pool=forks"
 	},
-	"keywords": [],
-	"author": "",
+	"keywords": ["kademlia", "p2p", "dht", "ws"],
+	"author": "zeroExBingbong",
 	"license": "ISC",
 	"dependencies": {
 		"@types/ws": "^8.5.12",

@@ -298,7 +298,7 @@ class KademliaNode extends AppLogger {
 
 	private handleMessage = async (msg: Buffer, info: dgram.RemoteInfo) => {
 		try {
-			const message = JSON.parse(msg.toString()) as Message<MessagePayload<UDPDataInfo>>;
+			const message = JSON.parse(msg.toString()) as Message<MessagePayload<UDPDataInfo & { key?: string; block?: string }>>;
 			const externalContact = message.from.nodeId;
 			await this.table.updateTables(new Peer(externalContact, this.address, externalContact + 3000));
 
@@ -332,17 +332,20 @@ class KademliaNode extends AppLogger {
 					await this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(payload, this.udpMessageResolver);
 					break;
 				}
-				case MessageType.Pong:
+				case MessageType.Pong: {
 					const resId = message.data.data.resId;
 					this.emitter.emit(`response_${resId}`, { error: null });
 					break;
-				case MessageType.FindValue:
+				}
+				case MessageType.FindValue: {
 					const result = await this.table.findValue(message.data.data.key);
 					if (Array.isArray(result)) {
-						const recipient = {
-							address: message.from.address,
-							nodeId: message.from.nodeId,
-						};
+						const recipient = Peer.fromJSON(
+							message.from.nodeId,
+							message.from.address,
+							message.from.port,
+							message.from.lastSeen,
+						);
 						const msgPayload = this.buildMessagePayload<UDPDataInfo & { key: string; block: string }>(
 							MessageType.Reply,
 							{
@@ -357,10 +360,12 @@ class KademliaNode extends AppLogger {
 						await this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(msg, this.udpMessageResolver);
 						console.log("array, value", message);
 					} else {
-						const recipient = {
-							address: message.from.address,
-							nodeId: message.from.nodeId,
-						};
+						const recipient = Peer.fromJSON(
+							message.from.nodeId,
+							message.from.address,
+							message.from.port,
+							message.from.lastSeen,
+						);
 						const msgPayload = this.buildMessagePayload<UDPDataInfo & { key: string; block: string }>(
 							MessageType.Reply,
 							{
@@ -375,22 +380,29 @@ class KademliaNode extends AppLogger {
 					}
 
 					break;
-				case MessageType.Store:
-					await this.table.nodeStore<MessagePayload<UDPDataInfo & { key?: string; block?: string }>>(message, info);
-					const recip = {
-						address: message.from.address,
-						nodeId: message.from.nodeId,
-					};
+				}
+				case MessageType.Store: {
+					await this.table.nodeStore<MessagePayload<UDPDataInfo & { key?: string; block?: string }>>(
+						message.data.data?.key,
+						message.data.data?.block,
+					);
+					const recipient = Peer.fromJSON(
+						message.from.nodeId,
+						message.from.address,
+						message.from.port,
+						message.from.lastSeen,
+					);
 
 					const msgPayload = this.buildMessagePayload<UDPDataInfo>(
 						MessageType.Reply,
 						{ resId: message.data.data.resId },
 						externalContact,
 					);
-					const msg = this.createUdpMessage<UDPDataInfo>(recip, MessageType.Reply, msgPayload);
+					const msg = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.Reply, msgPayload);
 					await this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(msg, this.udpMessageResolver);
 					break;
-				case MessageType.Ping:
+				}
+				case MessageType.Ping: {
 					const recipient = Peer.fromJSON(
 						message.from.nodeId,
 						message.from.address,
@@ -407,7 +419,7 @@ class KademliaNode extends AppLogger {
 					const payload = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.Pong, messagePayload);
 					await this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(payload, this.udpMessageResolver);
 					break;
-
+				}
 				default:
 					return;
 			}

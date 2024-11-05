@@ -1,6 +1,5 @@
-import dgram from "dgram";
 import { KBucket } from "../kBucket/kBucket";
-import { Message, MessagePayload, UDPDataInfo } from "../message/message";
+import { MessagePayload, UDPDataInfo } from "../message/message";
 import { BIT_SIZE, HASH_SIZE } from "../node/constants";
 import KademliaNode from "../node/node";
 import { Peer } from "../peer/peer";
@@ -16,7 +15,7 @@ class RoutingTable {
 	public readonly tableId: number;
 	public readonly node: KademliaNode;
 
-	private readonly store: Map<string, Peer[]>;
+	private readonly store: Map<string, string>;
 
 	constructor(tableId: number, node: KademliaNode) {
 		this.tableId = tableId;
@@ -171,12 +170,11 @@ class RoutingTable {
 		return BIT_SIZE - 1;
 	};
 
-	public nodeStore = <T extends MessagePayload<UDPDataInfo>>(message: Message<T>, info: dgram.RemoteInfo) => {
-		const { data } = message.data;
-		this.store.set(data.resId, data.closestNodes);
+	public nodeStore = <T extends MessagePayload<UDPDataInfo>>(key: string, value: string) => {
+		this.store.set(key, value);
 	};
 
-	public findValue = async (key: string): Promise<number[] | Peer[]> => {
+	public findValue = async (key: string): Promise<string | Peer[]> => {
 		if (this.store.has(key)) {
 			return this.store.get(key);
 		}

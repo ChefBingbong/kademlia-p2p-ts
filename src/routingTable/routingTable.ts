@@ -1,6 +1,6 @@
 import { KBucket } from "../kBucket/kBucket";
 import { MessagePayload, UDPDataInfo } from "../message/message";
-import { BIT_SIZE, HASH_SIZE } from "../node/constants";
+import { ALPHA, BIT_SIZE, HASH_SIZE } from "../node/constants";
 import KademliaNode from "../node/node";
 import { Peer } from "../peer/peer";
 import { XOR } from "../utils/nodeUtils";
@@ -175,11 +175,12 @@ class RoutingTable {
 	};
 
 	public findValue = async (key: string): Promise<string | Peer[]> => {
+		console.log(key, this.store.get(key));
 		if (this.store.has(key)) {
 			return this.store.get(key);
 		}
 
-		return this.findNode(Number(key), BIT_SIZE);
+		return this.findNode(Number(key), ALPHA);
 	};
 }
 

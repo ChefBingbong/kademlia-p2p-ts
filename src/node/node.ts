@@ -229,7 +229,7 @@ class KademliaNode extends AppLogger {
 					return this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(message, this.udpMessageResolver);
 				});
 
-				await Promise.all(promises);
+				return await Promise.all(promises);
 			} catch (e) {
 				console.error(e);
 			}
@@ -253,7 +253,9 @@ class KademliaNode extends AppLogger {
 					return this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(message, this.udpMessageResolver);
 				});
 
-				for await (const result of promises) {
+				const resolved = await Promise.all(promises);
+				console.log(resolved);
+				for await (const result of resolved) {
 					// if (typeof result === "string") {
 					return result;
 					// }
@@ -306,10 +308,13 @@ class KademliaNode extends AppLogger {
 				case MessageType.Reply: {
 					this.udpTransport.messages.REPLY.set(message.data.data.resId, message);
 
-					const closestNodes = message.data.data.closestNodes;
+					const closestNodes = [];
+					const key = message.data.data?.key;
+					const block = message.data.data?.block;
 					const resId = message.data.data.resId;
 
-					this.emitter.emit(`response_reply_${resId}`, { closestNodes, error: null });
+					if (block) this.emitter.emit(`response_reply2_${resId}`, { closestNodes, key, block, error: null });
+					this.emitter.emit(`response_reply_${resId}`, { closestNodes, key, block, error: null });
 					break;
 				}
 				case MessageType.FindNode: {
@@ -352,13 +357,12 @@ class KademliaNode extends AppLogger {
 								resId: message.data.data.resId,
 								key: message.data.data?.key,
 								block: message.data.data?.block,
-								closestNodes: result,
+								closestNodes: message.data.data?.closestNodes,
 							},
 							externalContact,
 						);
 						const msg = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.Reply, msgPayload);
 						await this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(msg, this.udpMessageResolver);
-						console.log("array, value", message);
 					} else {
 						const recipient = Peer.fromJSON(
 							message.from.nodeId,
@@ -371,7 +375,8 @@ class KademliaNode extends AppLogger {
 							{
 								resId: message.data.data.resId,
 								key: message.data.data?.key,
-								block: result,
+								block: message.data.data?.block,
+								closestNodes: message.data.data?.closestNodes,
 							},
 							externalContact,
 						);
@@ -393,9 +398,9 @@ class KademliaNode extends AppLogger {
 						message.from.lastSeen,
 					);
 
-					const msgPayload = this.buildMessagePayload<UDPDataInfo>(
+					const msgPayload = this.buildMessagePayload<UDPDataInfo & { key?: string; block?: string }>(
 						MessageType.Reply,
-						{ resId: message.data.data.resId },
+						{ resId: message.data.data.resId, key: message.data.data?.key, block: message.data.data?.block },
 						externalContact,
 					);
 					const msg = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.Reply, msgPayload);
@@ -440,6 +445,13 @@ class KademliaNode extends AppLogger {
 			}
 			const nodes = data.closestNodes.map((n: PeerJSON) => Peer.fromJSON(n.nodeId, this.address, n.port, n.lastSeen));
 			resolve(nodes);
+		});
+
+		this.emitter.once(`response_reply2_${responseId}`, (data: any) => {
+			if (data.error) {
+				return reject(data.error);
+			}
+			resolve(data);
 		});
 
 		this.emitter.once(`response_pong_${responseId}`, (data: any) => {

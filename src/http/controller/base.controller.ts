@@ -80,9 +80,8 @@ class BaseController {
 
 	public storeValue = async (req: Request, res: Response, next: NextFunction) => {
 		try {
-			const value = "test";
-			const key = hashKeyAndmapToKeyspace(value);
-			const closest = await this.node.store(key, value);
+			const key = hashKeyAndmapToKeyspace(req.params.value);
+			const closest = await this.node.store(key, req.params.value);
 			return res.json({ result: closest, key });
 		} catch (error) {
 			next(error);

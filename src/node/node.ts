@@ -309,7 +309,7 @@ class KademliaNode extends AppLogger {
 					const closestNodes = message.data.data.closestNodes;
 					const resId = message.data.data.resId;
 
-					this.emitter.emit(`response_${resId}`, { closestNodes, error: null });
+					this.emitter.emit(`response_reply_${resId}`, { closestNodes, error: null });
 					break;
 				}
 				case MessageType.FindNode: {
@@ -334,7 +334,7 @@ class KademliaNode extends AppLogger {
 				}
 				case MessageType.Pong: {
 					const resId = message.data.data.resId;
-					this.emitter.emit(`response_${resId}`, { error: null });
+					this.emitter.emit(`response_pong_${resId}`, { error: null });
 					break;
 				}
 				case MessageType.FindValue: {
@@ -434,12 +434,19 @@ class KademliaNode extends AppLogger {
 		if (type === MessageType.Reply) resolve();
 		if (type === MessageType.Pong) resolve();
 
-		this.emitter.once(`response_${responseId}`, (data: any) => {
+		this.emitter.once(`response_reply_${responseId}`, (data: any) => {
 			if (data.error) {
 				return reject(data.error);
 			}
 			const nodes = data.closestNodes.map((n: PeerJSON) => Peer.fromJSON(n.nodeId, this.address, n.port, n.lastSeen));
 			resolve(nodes);
+		});
+
+		this.emitter.once(`response_pong_${responseId}`, (data: any) => {
+			if (data.error) {
+				return reject(data.error);
+			}
+			resolve(data);
 		});
 	};
 

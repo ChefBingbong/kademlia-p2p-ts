@@ -6,12 +6,12 @@ import { DiscoveryScheduler, Schedules } from "../discoveryScheduler/discoverySc
 import { App } from "../http/app";
 import { AppLogger } from "../logging/logger";
 import { Message, MessagePayload, UDPDataInfo } from "../message/message";
-import { MessageType, PacketType, Transports } from "../message/types";
 import { Peer, PeerJSON } from "../peer/peer";
 import RoutingTable from "../routingTable/routingTable";
 import WebSocketTransport from "../transports/tcp/wsTransport";
-import { BroadcastData, DirectData, TcpPacket } from "../transports/types";
 import UDPTransport from "../transports/udp/udpTransport";
+import { MessageType, PacketType, Transports } from "../types/messageTypes";
+import { BroadcastData, DirectData, TcpPacket } from "../types/udpTransportTypes";
 import { extractError } from "../utils/extractError";
 import { chunk, extractNumber, getIdealDistance } from "../utils/nodeUtils";
 import { ALPHA, BIT_SIZE } from "./constants";

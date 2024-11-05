@@ -3,8 +3,8 @@ import { Logger } from "winston";
 import { Server } from "ws";
 import { AppLogger } from "../../logging/logger";
 import { Message, MessagePayload, UDPDataInfo } from "../../message/message";
-import { MessageType, PacketType } from "../../message/types";
-import { BroadcastData, DirectData, TcpPacket } from "../types";
+import { MessageType, PacketType } from "../../types/messageTypes";
+import { BroadcastData, DirectData, TcpPacket } from "../../types/udpTransportTypes";
 
 export type BaseMessageType = Partial<{
 	[key in MessageType]: Map<string, any>;

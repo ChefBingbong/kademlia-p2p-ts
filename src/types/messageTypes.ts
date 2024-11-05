@@ -1,4 +1,4 @@
-import { Message } from "./message";
+import { Message } from "../message/message";
 
 export interface Queue<T> {
 	[partyId: string]: T | null;

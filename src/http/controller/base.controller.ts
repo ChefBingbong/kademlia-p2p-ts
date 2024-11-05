@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
-import { MessageType, Transports } from "../../message/types";
 import KademliaNode from "../../node/node";
-import { BroadcastData, DirectData } from "../../transports/types";
+import { MessageType, Transports } from "../../types/messageTypes";
+import { BroadcastData, DirectData } from "../../types/udpTransportTypes";
 
 class BaseController {
 	public node: KademliaNode;

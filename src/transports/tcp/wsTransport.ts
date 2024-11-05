@@ -1,11 +1,11 @@
 import { Server, WebSocket } from "ws";
 import { Message } from "../../message/message";
-import { MessageType, PacketType } from "../../message/types";
 import { Listener, P2PNetworkEventEmitter } from "../../node/eventEmitter";
+import { MessageType, PacketType } from "../../types/messageTypes";
+import { BroadcastData, DirectData, HandShake, TcpData, TcpPacket } from "../../types/udpTransportTypes";
 import { ErrorWithCode, ProtocolError } from "../../utils/errors";
 import { extractError } from "../../utils/extractError";
 import AbstractTransport, { BaseMessageType } from "../abstractTransport/abstractTransport";
-import { BroadcastData, DirectData, HandShake, TcpData, TcpPacket } from "../types";
 
 export type TCPMessage = { type: string; message: string; to: string };
 type OnMessagePayload<T extends BroadcastData | DirectData> = {

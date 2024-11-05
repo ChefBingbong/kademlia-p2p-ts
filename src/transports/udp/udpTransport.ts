@@ -1,7 +1,7 @@
 import dgram from "dgram";
 import { Message, MessagePayload, UDPDataInfo } from "../../message/message";
-import { MessageType } from "../../message/types";
 import { Peer } from "../../peer/peer";
+import { MessageType } from "../../types/messageTypes";
 import { extractError } from "../../utils/extractError";
 import { timeoutReject } from "../../utils/nodeUtils";
 import AbstractTransport, { BaseMessageType } from "../abstractTransport/abstractTransport";

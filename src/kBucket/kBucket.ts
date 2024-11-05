@@ -1,9 +1,9 @@
 import { v4 } from "uuid";
 import { MessagePayload, UDPDataInfo } from "../message/message";
-import { MessageType } from "../message/types";
 import { BIT_SIZE, K_BUCKET_SIZE } from "../node/constants";
 import KademliaNode from "../node/node";
 import { Peer } from "../peer/peer";
+import { MessageType } from "../types/messageTypes";
 
 export class KBucket {
 	public nodes: Peer[];

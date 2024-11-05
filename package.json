@@ -11,11 +11,12 @@
 		"format:check:staged": "lint-staged",
 		"format:check": "biome format .",
 		"format:write": "biome format . --write",
+		"lint": "biome lint .",
 		"prepare": "husky install",
 		"test": "vitest run --pool=forks"
 	},
-	"keywords": [],
-	"author": "",
+	"keywords": ["kademlia", "p2p", "dht", "ws"],
+	"author": "zeroExBingbong",
 	"license": "ISC",
 	"dependencies": {
 		"@types/ws": "^8.5.12",

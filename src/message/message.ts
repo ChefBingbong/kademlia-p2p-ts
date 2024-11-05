@@ -1,7 +1,6 @@
 import { Peer, PeerJSON } from "../peer/peer";
 import { MessageType, Transports } from "../types/messageTypes";
 
-
 export type MessageNode = {
 	address: string;
 	nodeId: number;

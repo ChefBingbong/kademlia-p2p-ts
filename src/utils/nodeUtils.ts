@@ -117,3 +117,5 @@ export const hashKeyAndmapToKeyspace = (data: string) => {
 	const hash = generateHash(data).substring(0, 8);
 	return parseInt(hash, 16) % HASH_SIZE;
 };
+
+export const isArray = (value: any) => Array.isArray(value);

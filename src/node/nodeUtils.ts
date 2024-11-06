@@ -3,8 +3,8 @@ import WebSocketTransport from "../transports/tcp/wsTransport";
 import { BIT_SIZE } from "./constants";
 
 export class NodeUtils {
-	public static getIsNetworkEstablished = (numBuckets: number, numPeers: number) => {
-		const minPeers = Boolean(numPeers >= BIT_SIZE * 2 - BIT_SIZE / 2);
+	public static getIsNetworkEstablished = (numBuckets: number, peers: Peer[]) => {
+		const minPeers = Boolean(peers.length >= BIT_SIZE * 2 - BIT_SIZE / 2);
 		return Boolean(minPeers && numBuckets === BIT_SIZE);
 	};
 

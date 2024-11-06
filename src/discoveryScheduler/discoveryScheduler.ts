@@ -1,7 +1,7 @@
 import { ScheduledTask, schedule } from "node-cron";
 
 export enum Schedules {
-	Fast = "*/35 * * * * *",
+	Fast = "*/15 * * * * *",
 	Slow = "*/30 * * * * *",
 }
 export type SchedulerInfo = {

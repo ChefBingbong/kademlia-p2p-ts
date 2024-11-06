@@ -24,7 +24,7 @@ export class Peer {
 	};
 
 	public getIsNodeStale = () => {
-		return Boolean(this.lastSeen > 35000);
+		return Boolean(Date.now() > this.lastSeen + 60000);
 	};
 
 	public static fromJSON = (nodeId: number, address: string, port: number, lastSeen: number): Peer => {

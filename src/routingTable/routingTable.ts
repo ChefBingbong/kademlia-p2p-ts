@@ -69,11 +69,15 @@ class RoutingTable {
 	};
 
 	public getAllBuckets = () => {
-		let bucketsJson = {};
+		let bucketsJson: { [key: number]: KBucket } = {};
 		for (const bucket of this.buckets.values()) {
-			bucketsJson[bucket.bucketId] = bucket.toJSON();
+			bucketsJson[bucket.bucketId] = bucket;
 		}
 		return bucketsJson;
+	};
+
+	public getAllBucketsLen = () => {
+		return Array.from(this.buckets.keys()).length;
 	};
 
 	public findClosestNode = (targetId: number): Peer | null => {

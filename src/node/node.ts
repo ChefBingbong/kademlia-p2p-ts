@@ -10,7 +10,7 @@ import UDPTransport from "../transports/udp/udpTransport";
 import { MessageType, PacketType, Transports } from "../types/messageTypes";
 import { BroadcastData, DirectData, TcpPacket } from "../types/udpTransportTypes";
 import { extractError } from "../utils/extractError";
-import { chunk, extractNumber, getIdealDistance, hashKeyAndmapToKeyspace } from "../utils/nodeUtils";
+import { chunk, getIdealDistance, hashKeyAndmapToKeyspace } from "../utils/nodeUtils";
 import AbstractNode from "./abstractNode/abstractNode";
 import { ALPHA, BIT_SIZE } from "./constants";
 import { NodeUtils } from "./nodeUtils";
@@ -70,55 +70,13 @@ class KademliaNode extends AbstractNode {
 				await this.table.updateTables(closeNodes);
 				const routingPeers = this.table.getAllPeers();
 
-				// await this.updatePeerDiscoveryInterval(routingPeers);
+				await this.updatePeerDiscoveryInterval(routingPeers);
 				await this.refreshAndUpdateConnections(routingPeers);
 			} catch (error) {
 				this.log.error(`message: ${extractError(error)}, fn: executeCronTask`);
 			}
 		});
 	}
-
-	// public async initDiscScheduler() {
-	// 	this.discScheduler.createSchedule(this.discScheduler.schedule, async () => {
-	// 		try {
-	// 			const closeNodes = await this.findNodes(this.nodeId);
-	// 			await this.table.updateTables(closeNodes);
-
-	// 			const routingPeers = this.table.getAllPeers();
-	// 			const numBuckets = Object.values(this.table.getAllBuckets()).length;
-
-	// 			const minPeers = Boolean(routingPeers.length >= BIT_SIZE * 2 - BIT_SIZE / 2);
-	// 			const isNteworkEstablished = Boolean(minPeers && numBuckets === BIT_SIZE);
-
-	// 			if (this.discInitComplete) {
-	// 				if (isNteworkEstablished && this.discScheduler.schedule === Schedules.Fast) {
-	// 					await this.setDiscoveryInterval(Schedules.Slow);
-	// 				} else if (!isNteworkEstablished && this.discScheduler.schedule === Schedules.Slow) {
-	// 					await this.setDiscoveryInterval(Schedules.Fast);
-	// 				}
-	// 			}
-	// 			for (const closestNode of routingPeers) {
-	// 				if (Date.now() > closestNode.lastSeen + 60000 && this.nodeId !== closestNode.nodeId) {
-	// 					const connection = this.wsTransport.connections.get(closestNode.nodeId.toString());
-	// 					if (connection) {
-	// 						await connection.close();
-	// 						this.wsTransport.connections.delete(closestNode.nodeId.toString());
-	// 						this.wsTransport.neighbors.delete(closestNode.nodeId.toString());
-	// 					}
-	// 				}
-	// 				if (!this.wsTransport.connections.has(closestNode.nodeId.toString())) {
-	// 					this.wsTransport.connect(closestNode.port, () => {
-	// 						console.log(`Connection from ${this.nodeId} to ${closestNode.port} established.`);
-	// 					});
-	// 				}
-	// 			}
-
-	// 			this.discInitComplete = true;
-	// 		} catch (error) {
-	// 			this.log.error(`message: ${extractError(error)}, fn: executeCronTask`);
-	// 		}
-	// 	});
-	// }
 
 	private findNodes = async (key: number): Promise<Peer[]> => {
 		let iteration: number;
@@ -154,12 +112,7 @@ class KademliaNode extends AbstractNode {
 				}
 			}
 		} catch (e) {
-			const errorMessage = extractError(e);
-			console.log(errorMessage);
-			if (errorMessage.includes("TIMEOUT")) {
-				const nodeId = extractNumber(errorMessage);
-				this.handleTcpDisconnet(nodeId);
-			}
+			this.log.info(`message: ${extractError(e)}, fn: handleFindNodeQuery`);
 		}
 
 		return hasCloserThanExist;
@@ -185,7 +138,6 @@ class KademliaNode extends AbstractNode {
 			const payload = this.buildMessagePayload<UDPDataInfo>(MessageType.PeerDiscovery, { resId: v4() }, recipient.nodeId);
 			const message = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.FindNode, payload);
 
-			// console.log(message);
 			const findNodeResponse = this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(message, this.udpMessageResolver);
 			findNodePromises.push(
 				this.handleFindNodeQuery(findNodeResponse, node, contactedNodes, nodeShortlist, initialClosestNode),
@@ -301,16 +253,11 @@ class KademliaNode extends AbstractNode {
 				case MessageType.Reply: {
 					this.udpTransport.messages.REPLY.set(message.data.data.resId, message);
 
-					const closestNodes = [];
 					const key = message.data.data?.key;
 					const value = message.data.data?.value;
 					const resId = message.data.data.resId;
+					const closestNodes = message.data.data?.closestNodes;
 
-					if (value)
-						this.emitter.emit(`response_reply2_${resId}`, {
-							value,
-							error: null,
-						});
 					this.emitter.emit(`response_reply_${resId}`, {
 						closestNodes,
 						key,
@@ -341,7 +288,7 @@ class KademliaNode extends AbstractNode {
 				}
 				case MessageType.Pong: {
 					const resId = message.data.data.resId;
-					this.emitter.emit(`response_pong_${resId}`, { error: null });
+					this.emitter.emit(`response_pong_${resId}`, { resId, error: null });
 					break;
 				}
 				case MessageType.FindValue: {
@@ -424,7 +371,10 @@ class KademliaNode extends AbstractNode {
 
 					const messagePayload = this.buildMessagePayload<UDPDataInfo>(
 						MessageType.Pong,
-						{ resId: message.data.data.resId },
+						{
+							resId: message.data.data.resId,
+							closestNodes: message.data.data.closestNodes,
+						},
 						externalContact,
 					);
 					const payload = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.Pong, messagePayload);
@@ -449,15 +399,14 @@ class KademliaNode extends AbstractNode {
 			if (data.error) {
 				return reject(data.error);
 			}
-			const nodes = data.closestNodes.map((n: PeerJSON) => Peer.fromJSON(n.nodeId, this.address, n.port, n.lastSeen));
-			resolve(nodes);
-		});
-
-		this.emitter.once(`response_reply2_${responseId}`, (data: any) => {
-			if (data.error) {
-				return reject(data.error);
+			if (data?.value) {
+				resolve(data.value);
+			} else {
+				const nodes = data.closestNodes.map((node: PeerJSON) =>
+					Peer.fromJSON(node.nodeId, this.address, node.port, node.lastSeen),
+				);
+				resolve(nodes);
 			}
-			resolve(data);
 		});
 
 		this.emitter.once(`response_pong_${responseId}`, (data: any) => {

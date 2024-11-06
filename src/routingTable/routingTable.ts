@@ -69,9 +69,9 @@ class RoutingTable {
 	};
 
 	public getAllBuckets = () => {
-		let bucketsJson: { [key: number]: KBucket } = {};
+		let bucketsJson: { [key: number]: typeof KBucket.prototype.toJSON.prototype } = {};
 		for (const bucket of this.buckets.values()) {
-			bucketsJson[bucket.bucketId] = bucket;
+			bucketsJson[bucket.bucketId] = bucket.toJSON();
 		}
 		return bucketsJson;
 	};

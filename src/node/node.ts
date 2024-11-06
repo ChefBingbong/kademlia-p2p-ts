@@ -1,6 +1,6 @@
 import * as dgram from "dgram";
 import { v4 } from "uuid";
-import { DiscoveryScheduler } from "../discoveryScheduler/discoveryScheduler";
+import { DiscoveryScheduler, Schedules } from "../discoveryScheduler/discoveryScheduler";
 import { App } from "../http/app";
 import { Message, MessagePayload, UDPDataInfo } from "../message/message";
 import { Peer, PeerJSON } from "../peer/peer";
@@ -13,7 +13,6 @@ import { extractError } from "../utils/extractError";
 import { chunk, extractNumber, getIdealDistance, hashKeyAndmapToKeyspace } from "../utils/nodeUtils";
 import AbstractNode from "./abstractNode/abstractNode";
 import { ALPHA, BIT_SIZE } from "./constants";
-import { NodeUtils } from "./nodeUtils";
 
 class KademliaNode extends AbstractNode {
 	public readonly nodeContact: Peer;
@@ -69,13 +68,36 @@ class KademliaNode extends AbstractNode {
 				const closeNodes = await this.findNodes(this.nodeId);
 				await this.table.updateTables(closeNodes);
 
-				const peers = this.table.getAllPeers();
-				const buckets = Object.values(this.table.getAllBuckets()).length;
-				const isNteworkEstablished = NodeUtils.getIsNetworkEstablished(buckets, peers.length);
+				const routingPeers = this.table.getAllPeers();
+				const numBuckets = Object.values(this.table.getAllBuckets()).length;
 
-				// await NodeUtils.refreshNodeConnections(peers, this.wsTransport);
-				await this.updatePeerDiscoveryInterval(isNteworkEstablished);
-				await this.connectToNewPeers(peers);
+				const minPeers = Boolean(routingPeers.length >= BIT_SIZE * 2 - BIT_SIZE / 2);
+				const isNteworkEstablished = Boolean(minPeers && numBuckets === BIT_SIZE);
+
+				if (this.discInitComplete) {
+					if (isNteworkEstablished && this.discScheduler.schedule === Schedules.Fast) {
+						// await this.setDiscoveryInterval(Schedules.Slow);
+					} else if (!isNteworkEstablished && this.discScheduler.schedule === Schedules.Slow) {
+						// await this.setDiscoveryInterval(Schedules.Fast);
+					}
+				}
+				for (const closestNode of routingPeers) {
+					if (Date.now() > closestNode.lastSeen + 60000 && this.nodeId !== closestNode.nodeId) {
+						const connection = this.wsTransport.connections.get(closestNode.nodeId.toString());
+						if (connection) {
+							await connection.close();
+							this.wsTransport.connections.delete(closestNode.nodeId.toString());
+							this.wsTransport.neighbors.delete(closestNode.nodeId.toString());
+						}
+					}
+					if (!this.wsTransport.connections.has(closestNode.nodeId.toString())) {
+						this.wsTransport.connect(closestNode.port, () => {
+							console.log(`Connection from ${this.nodeId} to ${closestNode.port} established.`);
+						});
+					}
+				}
+
+				this.discInitComplete = true;
 			} catch (error) {
 				this.log.error(`message: ${extractError(error)}, fn: executeCronTask`);
 			}

@@ -2,6 +2,7 @@ import { v4 } from "uuid";
 import { MessagePayload, UDPDataInfo } from "../message/message";
 import { BIT_SIZE, K_BUCKET_SIZE } from "../node/constants";
 import KademliaNode from "../node/node";
+import { NodeUtils } from "../node/nodeUtils";
 import { Peer } from "../peer/peer";
 import { MessageType } from "../types/messageTypes";
 
@@ -55,10 +56,11 @@ export class KBucket {
 			return;
 		}
 		try {
+			if (this.node.nodeContact.nodeId === this.nodes[0].nodeId) return;
 			// try check if node is only lone if not remove its id from the nodes arr
-			const recipient = this.nodes[0].toJSON();
-			const payload = this.node.buildMessagePayload<UDPDataInfo>(MessageType.Ping, { resId: v4() }, this.nodes[0].nodeId);
-			const message = this.node.createUdpMessage<UDPDataInfo>(recipient, MessageType.Ping, payload);
+			const to = this.nodes[0].toJSON();
+			const data = { resId: v4() };
+			const message = NodeUtils.createUdpMessage<UDPDataInfo>(MessageType.Ping, data, this.node.nodeContact, to);
 			await this.node.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(message, this.node.udpMessageResolver);
 		} catch (e) {
 			this.nodes.shift();

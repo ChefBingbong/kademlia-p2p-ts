@@ -41,9 +41,6 @@ class KademliaNode extends AbstractNode {
 
 		this.api = new App(this, this.port - 1000);
 		this.table = new RoutingTable(this.nodeId, this);
-
-		this.contactedPeers = new Map();
-		this.failedContacts = new Map();
 		this.listen();
 	}
 
@@ -84,8 +81,6 @@ class KademliaNode extends AbstractNode {
 
 	private findNodes = async (key: number): Promise<Peer[]> => {
 		const contacts = new Map<string, Peer>();
-		const failed = new Map<string, Peer>();
-
 		let iteration: number = null;
 		const shortlist = this.table.findNode(key, ALPHA);
 		await this.findNodeRecursiveSearch(contacts, shortlist, iteration);
@@ -95,10 +90,10 @@ class KademliaNode extends AbstractNode {
 	private handleFindNodeQuery = async (contacts: Map<string, Peer>, node: Peer, nodeShortlist: Peer[]) => {
 		let hasCloserThanExist = false;
 		try {
-			const recipient = node.toJSON();
-			const payload = this.buildMessagePayload<UDPDataInfo>(MessageType.PeerDiscovery, { resId: v4() }, recipient.nodeId);
-			const message = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.FindNode, payload);
-			const findNodeResponse = this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(message, this.udpMessageResolver);
+			const to = node.toJSON();
+			const data = { resId: v4() };
+			const message = NodeUtils.createUdpMessage(MessageType.FindNode, data, this.nodeContact, to);
+			const findNodeResponse = this.udpTransport.sendMessage(message, this.udpMessageResolver);
 
 			const closeNodes = await findNodeResponse;
 			let initialClosestNode = nodeShortlist[0];
@@ -116,7 +111,6 @@ class KademliaNode extends AbstractNode {
 				}
 			}
 		} catch (e) {
-			this.failedContacts.set(node.nodeId.toString(), node);
 			this.log.info(`message: ${extractError(e)}, fn: handleFindNodeQuery`);
 		}
 
@@ -130,7 +124,7 @@ class KademliaNode extends AbstractNode {
 		const alphaContacts = nodeShortlist.slice(iteration * ALPHA, iteration * ALPHA + ALPHA);
 
 		for (const node of alphaContacts) {
-			if (this.contactedPeers.has(node.toString())) continue;
+			if (contacts.has(node.toString())) continue;
 			findNodePromises.push(this.handleFindNodeQuery(contacts, node, nodeShortlist));
 		}
 
@@ -154,14 +148,10 @@ class KademliaNode extends AbstractNode {
 		for (const nodes of closestNodesChunked) {
 			try {
 				const promises = nodes.map((node) => {
-					const recipient = new Peer(node.nodeId, this.address, node.port);
-					const payload = this.buildMessagePayload<UDPDataInfo>(
-						MessageType.Store,
-						{ resId: v4(), key: key, value },
-						node.nodeId,
-					);
-					const message = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.Store, payload);
-					return this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(message, this.udpMessageResolver);
+					const data = { resId: v4(), key, value };
+					const to = new Peer(node.nodeId, this.address, node.port);
+					const message = NodeUtils.createUdpMessage(MessageType.Store, data, this.nodeContact, to);
+					return this.udpTransport.sendMessage(message, this.udpMessageResolver);
 				});
 
 				return await Promise.all(promises);
@@ -179,14 +169,10 @@ class KademliaNode extends AbstractNode {
 		for (const nodes of closestNodesChunked) {
 			try {
 				const promises = nodes.map((node) => {
-					const recipient = new Peer(node.nodeId, this.address, node.port);
-					const payload = this.buildMessagePayload<UDPDataInfo & { key: number; value: string }>(
-						MessageType.FindValue,
-						{ resId: v4(), key, value: value, closestNodes },
-						node.nodeId,
-					);
-					const message = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.FindValue, payload);
-					return this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(message, this.udpMessageResolver);
+					const to = new Peer(node.nodeId, this.address, node.port);
+					const data = { resId: v4(), key, value: value, closestNodes };
+					const message = NodeUtils.createUdpMessage(MessageType.FindValue, data, this.nodeContact, to);
+					return this.udpTransport.sendMessage(message, this.udpMessageResolver);
 				});
 
 				const resolved = await Promise.all(promises);
@@ -204,29 +190,23 @@ class KademliaNode extends AbstractNode {
 		try {
 			const message = JSON.parse(msg.toString()) as Message<StoreData>;
 			const externalContact = message.from.nodeId;
-			await this.table.updateTables(new Peer(externalContact, this.address, externalContact + 3000));
+			await this.table.updateTables(new Peer(message.from.nodeId, this.address, message.from.port));
 
-			const data = {
-				resId: message.data.data?.resId,
-				key: message.data.data?.key,
-				value: message.data.data?.value,
-				closestNodes: message.data.data?.closestNodes,
-			};
 			switch (message.type) {
 				case MessageType.Store: {
 					await this.table.nodeStore<StoreData>(message.data.data?.key, message.data.data?.value);
-					await this.handleMessageResponse(MessageType.Pong, message, data);
+					await this.handleMessageResponse(MessageType.Pong, message, message.data?.data);
 					break;
 				}
 				case MessageType.Ping: {
 					this.udpTransport.messages.PING.set(message.data.data.resId, message);
-					await this.handleMessageResponse(MessageType.Pong, message, data);
+					await this.handleMessageResponse(MessageType.Pong, message, message.data?.data);
 					break;
 				}
 				case MessageType.Reply: {
 					const resId = message.data.data.resId;
 					this.udpTransport.messages.REPLY.set(message.data.data.resId, message);
-					this.emitter.emit(`response_reply_${resId}`, { ...data, error: null });
+					this.emitter.emit(`response_reply_${resId}`, { ...message.data?.data, error: null });
 					break;
 				}
 				case MessageType.Pong: {
@@ -244,10 +224,10 @@ class KademliaNode extends AbstractNode {
 				}
 				case MessageType.FindValue: {
 					const res = await this.table.findValue(message.data.data.key);
-					const closestNodes = isArray(res) ? res : data.closestNodes;
+					const closestNodes = isArray(res) ? res : message.data?.data.closestNodes;
 
-					const value = isArray(res) ? data?.value : res;
-					const msgData = { ...data, closestNodes, value };
+					const value = isArray(res) ? message.data?.data?.value : res;
+					const msgData = { ...message.data?.data, closestNodes, value };
 					await this.handleMessageResponse(MessageType.Reply, message, msgData);
 					break;
 				}
@@ -288,16 +268,13 @@ class KademliaNode extends AbstractNode {
 	};
 
 	private handleMessageResponse = async (type: MessageType, message: Message<StoreData>, data: any) => {
-		const recipient = Peer.fromJSON(message.from.nodeId, message.from.address, message.from.port, message.from.lastSeen);
-		const msgPayload = this.buildMessagePayload<UDPDataInfo>(type, data, message.from.nodeId);
-		const msg = this.createUdpMessage<UDPDataInfo>(recipient, type, msgPayload);
-		await this.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(msg, this.udpMessageResolver);
+		const to = Peer.fromJSON(message.from.nodeId, message.from.address, message.from.port, message.from.lastSeen);
+		const msg = NodeUtils.createUdpMessage(type, data, this.nodeContact, to);
+		await this.udpTransport.sendMessage(msg, this.udpMessageResolver);
 	};
 
 	public sendTcpTransportMessage = <T extends BroadcastData | DirectData>(type: MessageType, payload: T) => {
-		const packet = this.buildPacket<T>(type, payload);
-		const recipient = new Peer(Number(packet.message.to) - 3000, this.address, Number(packet.destination));
-		const message = this.createTcpMessage<T>(recipient, type, packet);
+		const message = NodeUtils.creatTcpMessage<T>(type, payload, this.nodeContact, this.nodeContact);
 		this.wsTransport.sendMessage<T>(message);
 	};
 
@@ -312,46 +289,18 @@ class KademliaNode extends AbstractNode {
 		}
 	};
 
-	private handleBroadcastMessage = async () => {
-		console.log(`recieveing broadcasting message: ${this.port}`);
-	};
-
-	private handleDirectMessage = async () => {
-		console.log(`recieving direct message: ${this.port}`);
-	};
-
-	public createUdpMessage = <T>(to: PeerJSON, type: MessageType, data: MessagePayload<T>) => {
-		const from = this.nodeContact.toJSON();
-		return Message.create<MessagePayload<T>>(to, from, Transports.Udp, data, type);
-	};
-
 	protected createTcpMessage = <T extends BroadcastData | DirectData>(to: PeerJSON, type: MessageType, payload: any) => {
 		const from = this.nodeContact.toJSON();
-		const packet = this.buildPacket<T>(type, payload);
+		const packet = NodeUtils.buildPacket<T>(type, payload);
 		return Message.create<TcpPacket<T>>(to, from, Transports.Tcp, packet, type);
 	};
 
-	public buildMessagePayload = <T extends UDPDataInfo>(type: MessageType, data: T, recipient: number): MessagePayload<T> => {
-		return {
-			description: `${recipient} Recieved Peer discovery ${type} from ${this.nodeId}`,
-			type,
-			data,
-		};
+	public handleBroadcastMessage = async () => {
+		console.log(`recieveing broadcasting message: ${this.port}`);
 	};
 
-	private buildPacket = <T extends BroadcastData | DirectData>(
-		type: MessageType,
-		message: any,
-		ttl: number = 255,
-	): TcpPacket<T> => {
-		return {
-			id: v4(),
-			ttl: ttl,
-			type: type === MessageType.Braodcast ? PacketType.Broadcast : PacketType.Direct,
-			message,
-			destination: message.from,
-			origin: this.wsTransport.port.toString(),
-		};
+	public handleDirectMessage = async () => {
+		console.log(`recieving direct message: ${this.port}`);
 	};
 
 	public handleTcpDisconnet = async (nodeId: number) => {

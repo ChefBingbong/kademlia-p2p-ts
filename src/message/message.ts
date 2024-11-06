@@ -8,8 +8,10 @@ export type MessageNode = {
 
 export type PayloadInfo = { recipient: number; sender: number };
 export type UDPDataInfo = {
-	resId: string;
+	resId?: string;
 	closestNodes?: Peer[];
+	key?: number;
+	value?: string;
 };
 export type MessagePayload<T> = {
 	description: string;

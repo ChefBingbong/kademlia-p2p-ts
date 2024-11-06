@@ -22,4 +22,6 @@ export class NodeUtils {
 			}
 		});
 	};
+
+	public static isArray = (value: any) => Array.isArray(value);
 }

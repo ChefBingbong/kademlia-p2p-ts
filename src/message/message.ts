@@ -17,7 +17,12 @@ export type MessagePayload<T> = {
 	description: string;
 	type: MessageType;
 	data: T;
+	from: PeerJSON;
+	to: PeerJSON;
 };
+
+export type UdpPayload = MessagePayload<UDPDataInfo>;
+export type UdpMessage = Message<MessagePayload<UDPDataInfo>>;
 
 export class Message<T> {
 	public readonly from: PeerJSON;

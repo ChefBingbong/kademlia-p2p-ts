@@ -23,6 +23,10 @@ export class Peer {
 		this.lastSeen = Date.now();
 	};
 
+	public getIsNodeStale = () => {
+		return Boolean(this.lastSeen > 35000);
+	};
+
 	public static fromJSON = (nodeId: number, address: string, port: number, lastSeen: number): Peer => {
 		return new Peer(nodeId, address, port, lastSeen);
 	};

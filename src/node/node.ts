@@ -1,10 +1,7 @@
 import * as dgram from "dgram";
 import { v4 } from "uuid";
-import { Logger } from "winston";
-import { WebSocket } from "ws";
-import { DiscoveryScheduler, Schedules } from "../discoveryScheduler/discoveryScheduler";
+import { DiscoveryScheduler } from "../discoveryScheduler/discoveryScheduler";
 import { App } from "../http/app";
-import { AppLogger } from "../logging/logger";
 import { Message, MessagePayload, UDPDataInfo } from "../message/message";
 import { Peer, PeerJSON } from "../peer/peer";
 import RoutingTable from "../routingTable/routingTable";
@@ -14,76 +11,57 @@ import { MessageType, PacketType, Transports } from "../types/messageTypes";
 import { BroadcastData, DirectData, TcpPacket } from "../types/udpTransportTypes";
 import { extractError } from "../utils/extractError";
 import { chunk, extractNumber, getIdealDistance, hashKeyAndmapToKeyspace } from "../utils/nodeUtils";
+import AbstractNode from "./abstractNode/abstractNode";
 import { ALPHA, BIT_SIZE } from "./constants";
-import { P2PNetworkEventEmitter } from "./eventEmitter";
+import { NodeUtils } from "./nodeUtils";
 
-class KademliaNode extends AppLogger {
-	public readonly address: string;
-	public readonly port: number;
-	public readonly nodeId: number;
+class KademliaNode extends AbstractNode {
 	public readonly nodeContact: Peer;
-
 	public readonly table: RoutingTable;
-	public readonly api: App;
-	public readonly log: Logger;
-
 	public readonly contacted = new Map<string, number>();
-	public readonly connections: Map<string, WebSocket>;
+	public readonly api: App;
 
 	public readonly udpTransport: UDPTransport;
 	public readonly wsTransport: WebSocketTransport;
-	private readonly discScheduler: DiscoveryScheduler;
-	private readonly emitter: P2PNetworkEventEmitter;
 
+	private readonly discScheduler: DiscoveryScheduler;
 	public discInitComplete: boolean;
 
 	constructor(id: number, port: number) {
-		super("kademlia-node-logger", false);
+		super(id, port, "kademlia");
 
-		this.nodeId = id;
-		this.port = port;
-		this.address = "127.0.0.1";
-		this.log = this.logger;
 		this.discInitComplete = false;
-		this.connections = new Map();
-
 		this.nodeContact = new Peer(this.nodeId, this.address, this.port);
+		this.discScheduler = new DiscoveryScheduler({ jobId: "discScheduler" });
+
 		this.udpTransport = new UDPTransport(this.nodeId, this.port);
 		this.wsTransport = new WebSocketTransport(this.nodeId, this.port);
-
-		this.emitter = new P2PNetworkEventEmitter(false);
-		this.emitter.on.bind(this.emitter);
-		this.emitter.off.bind(this.emitter);
 
 		this.api = new App(this, this.port - 1000);
 		this.table = new RoutingTable(this.nodeId, this);
 
-		this.discScheduler = new DiscoveryScheduler({
-			jobId: "discScheduler",
-			schedule: Schedules.Fast,
-			process,
-		});
-
-		this.api.listen();
 		this.listen();
 	}
 
-	public listen(): (cb?: any) => void {
+	// register transport listeners
+	public listen = (cb?: any): ((cb?: any) => void) => {
 		this.udpTransport.onMessage(this.handleMessage);
 		this.wsTransport.onMessage(this.handleBroadcastMessage, PacketType.Broadcast);
 		this.wsTransport.onMessage(this.handleDirectMessage, PacketType.Direct);
 
 		this.wsTransport.onPeerDisconnect(this.handleTcpDisconnet);
 		this.wsTransport.onPeerConnection(() => null);
+		this.api.listen();
 
 		return (cb) => this.wsTransport.server.close(cb);
-	}
+	};
 
-	public async start() {
+	// node start function
+	public start = async () => {
 		const clostest = getIdealDistance();
 		await this.table.updateTables(clostest);
 		await this.initDiscScheduler();
-	}
+	};
 
 	public async initDiscScheduler() {
 		this.discScheduler.createSchedule(this.discScheduler.schedule, async () => {
@@ -91,36 +69,13 @@ class KademliaNode extends AppLogger {
 				const closeNodes = await this.findNodes(this.nodeId);
 				await this.table.updateTables(closeNodes);
 
-				const routingPeers = this.table.getAllPeers();
-				const numBuckets = Object.values(this.table.getAllBuckets()).length;
+				const peers = this.table.getAllPeers();
+				const buckets = Object.values(this.table.getAllBuckets()).length;
+				const isNteworkEstablished = NodeUtils.getIsNetworkEstablished(buckets, peers.length);
 
-				const minPeers = Boolean(routingPeers.length >= BIT_SIZE * 2 - BIT_SIZE / 2);
-				const isNteworkEstablished = Boolean(minPeers && numBuckets === BIT_SIZE);
-
-				if (this.discInitComplete) {
-					if (isNteworkEstablished && this.discScheduler.schedule === Schedules.Fast) {
-						await this.setDiscoveryInterval(Schedules.Slow);
-					} else if (!isNteworkEstablished && this.discScheduler.schedule === Schedules.Slow) {
-						await this.setDiscoveryInterval(Schedules.Fast);
-					}
-				}
-				for (const closestNode of routingPeers) {
-					if (Date.now() > closestNode.lastSeen + 60000 && this.nodeId !== closestNode.nodeId) {
-						const connection = this.wsTransport.connections.get(closestNode.nodeId.toString());
-						if (connection) {
-							await connection.close();
-							this.wsTransport.connections.delete(closestNode.nodeId.toString());
-							this.wsTransport.neighbors.delete(closestNode.nodeId.toString());
-						}
-					}
-					if (!this.wsTransport.connections.has(closestNode.nodeId.toString())) {
-						this.wsTransport.connect(closestNode.port, () => {
-							console.log(`Connection from ${this.nodeId} to ${closestNode.port} established.`);
-						});
-					}
-				}
-
-				this.discInitComplete = true;
+				// await NodeUtils.refreshNodeConnections(peers, this.wsTransport);
+				await this.updatePeerDiscoveryInterval(isNteworkEstablished);
+				await this.connectToNewPeers(peers);
 			} catch (error) {
 				this.log.error(`message: ${extractError(error)}, fn: executeCronTask`);
 			}
@@ -212,7 +167,7 @@ class KademliaNode extends AppLogger {
 		}
 	};
 
-	public async store(key: number, block: string) {
+	public async store(key: number, value: string) {
 		const closestNodes = await this.findNodes(this.nodeId);
 		const closestNodesChunked = chunk<Peer>(closestNodes, ALPHA);
 
@@ -220,9 +175,9 @@ class KademliaNode extends AppLogger {
 			try {
 				const promises = nodes.map((node) => {
 					const recipient = new Peer(node.nodeId, this.address, node.port);
-					const payload = this.buildMessagePayload<UDPDataInfo & { key: number; block: string }>(
+					const payload = this.buildMessagePayload<UDPDataInfo & { key: number; value: string }>(
 						MessageType.Store,
-						{ resId: v4(), key: key, block },
+						{ resId: v4(), key: key, value },
 						node.nodeId,
 					);
 					const message = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.Store, payload);
@@ -245,9 +200,9 @@ class KademliaNode extends AppLogger {
 			try {
 				const promises = nodes.map((node) => {
 					const recipient = new Peer(node.nodeId, this.address, node.port);
-					const payload = this.buildMessagePayload<UDPDataInfo & { key: number; block: string }>(
+					const payload = this.buildMessagePayload<UDPDataInfo & { key: number; value: string }>(
 						MessageType.FindValue,
-						{ resId: v4(), key, block: value, closestNodes },
+						{ resId: v4(), key, value: value, closestNodes },
 						node.nodeId,
 					);
 					const message = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.FindValue, payload);
@@ -255,7 +210,6 @@ class KademliaNode extends AppLogger {
 				});
 
 				const resolved = await Promise.all(promises);
-				console.log(resolved);
 				for await (const result of resolved) {
 					// if (typeof result === "string") {
 					return result;
@@ -299,9 +253,9 @@ class KademliaNode extends AppLogger {
 		}
 	};
 
-	private handleMessage = async (msg: Buffer, info: dgram.RemoteInfo) => {
+	public handleMessage = async (msg: Buffer, info: dgram.RemoteInfo) => {
 		try {
-			const message = JSON.parse(msg.toString()) as Message<MessagePayload<UDPDataInfo & { key?: string; block?: string }>>;
+			const message = JSON.parse(msg.toString()) as Message<MessagePayload<UDPDataInfo & { key?: string; value?: string }>>;
 			const externalContact = message.from.nodeId;
 			await this.table.updateTables(new Peer(externalContact, this.address, externalContact + 3000));
 
@@ -311,11 +265,11 @@ class KademliaNode extends AppLogger {
 
 					const closestNodes = [];
 					const key = message.data.data?.key;
-					const block = message.data.data?.block;
+					const value = message.data.data?.value;
 					const resId = message.data.data.resId;
 
-					if (block) this.emitter.emit(`response_reply2_${resId}`, { block, error: null });
-					this.emitter.emit(`response_reply_${resId}`, { closestNodes, key, block, error: null });
+					if (value) this.emitter.emit(`response_reply2_${resId}`, { value, error: null });
+					this.emitter.emit(`response_reply_${resId}`, { closestNodes, key, value, error: null });
 					break;
 				}
 				case MessageType.FindNode: {
@@ -352,12 +306,12 @@ class KademliaNode extends AppLogger {
 							message.from.port,
 							message.from.lastSeen,
 						);
-						const msgPayload = this.buildMessagePayload<UDPDataInfo & { key: string; block: string }>(
+						const msgPayload = this.buildMessagePayload<UDPDataInfo & { key: string; value: string }>(
 							MessageType.Reply,
 							{
 								resId: message.data.data.resId,
 								key: message.data.data?.key,
-								block: message.data.data?.block,
+								value: message.data.data?.value,
 								closestNodes: message.data.data.closestNodes,
 							},
 							externalContact,
@@ -371,12 +325,12 @@ class KademliaNode extends AppLogger {
 							message.from.port,
 							message.from.lastSeen,
 						);
-						const msgPayload = this.buildMessagePayload<UDPDataInfo & { key: string; block: string }>(
+						const msgPayload = this.buildMessagePayload<UDPDataInfo & { key: string; value: string }>(
 							MessageType.Reply,
 							{
 								resId: message.data.data.resId,
 								key: message.data.data?.key,
-								block: message.data.data?.block,
+								value: message.data.data?.value,
 								closestNodes: message.data.data.closestNodes,
 							},
 							externalContact,
@@ -388,9 +342,9 @@ class KademliaNode extends AppLogger {
 					break;
 				}
 				case MessageType.Store: {
-					await this.table.nodeStore<MessagePayload<UDPDataInfo & { key?: string; block?: string }>>(
+					await this.table.nodeStore<MessagePayload<UDPDataInfo & { key?: string; value?: string }>>(
 						message.data.data?.key,
-						message.data.data?.block,
+						message.data.data?.value,
 					);
 					const recipient = Peer.fromJSON(
 						message.from.nodeId,
@@ -399,9 +353,9 @@ class KademliaNode extends AppLogger {
 						message.from.lastSeen,
 					);
 
-					const msgPayload = this.buildMessagePayload<UDPDataInfo & { key?: string; block?: string }>(
+					const msgPayload = this.buildMessagePayload<UDPDataInfo & { key?: string; value?: string }>(
 						MessageType.Reply,
-						{ resId: message.data.data.resId, key: message.data.data?.key, block: message.data.data?.block },
+						{ resId: message.data.data.resId, key: message.data.data?.key, value: message.data.data?.value },
 						externalContact,
 					);
 					const msg = this.createUdpMessage<UDPDataInfo>(recipient, MessageType.Reply, msgPayload);
@@ -517,12 +471,27 @@ class KademliaNode extends AppLogger {
 		if (bucket.nodes.length === 0) this.table.removeBucket(peer);
 	};
 
-	private setDiscoveryInterval = async (interval: string) => {
-		this.discScheduler.setSchedule(interval);
-		this.discScheduler.stopCronJob();
-		this.discInitComplete = true;
-		await this.initDiscScheduler();
-		console.log(`setting disc interval to ${interval}`);
+	private updatePeerDiscoveryInterval = async (isEstablished: boolean) => {
+		const currentSchedule = this.discScheduler.schedule;
+		const newSchedule = this.discScheduler.getNewSchedule(isEstablished);
+
+		if (newSchedule !== currentSchedule) {
+			this.discScheduler.setSchedule(newSchedule);
+			this.discScheduler.stopCronJob();
+			await this.initDiscScheduler();
+			console.log(`setting disc interval to ${newSchedule}`);
+		}
+	};
+
+	private connectToNewPeers = async (peers: Peer[]) => {
+		for (const peer of peers) {
+			const peerId = peer.nodeId.toString();
+			if (this.wsTransport.connections.has(peerId)) continue;
+
+			this.wsTransport.connect(peer.port, () => {
+				console.log(`Connected from ${this.nodeId} to ${peer.port}.`);
+			});
+		}
 	};
 }
 

@@ -11,8 +11,6 @@ export type SchedulerInfo = {
 
 interface DiscoverySchedulerOpions {
 	jobId: string;
-	schedule: string;
-	process: NodeJS.Process;
 }
 export class DiscoveryScheduler {
 	public schedule: string;
@@ -21,10 +19,10 @@ export class DiscoveryScheduler {
 	public readonly jobId: string;
 	public readonly process: NodeJS.Process;
 
-	constructor({ jobId, schedule, process }: DiscoverySchedulerOpions) {
+	constructor({ jobId }: DiscoverySchedulerOpions) {
 		this.jobId = jobId;
 		this.process = process;
-		this.schedule = schedule;
+		this.schedule = Schedules.Fast;
 	}
 
 	public createSchedule(interval: string, callback: () => Promise<void>) {
@@ -61,5 +59,9 @@ export class DiscoveryScheduler {
 		this.process.on("uncaughtException", this.handleError);
 		this.process.on("SIGINT", this.handleExit);
 		this.process.on("SIGTERM", this.handleExit);
+	};
+
+	public getNewSchedule = (isEstablished: boolean) => {
+		return isEstablished && this.schedule === Schedules.Fast ? Schedules.Slow : Schedules.Fast;
 	};
 }

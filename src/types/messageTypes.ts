@@ -32,6 +32,7 @@ export enum Transports {
 }
 
 export enum MessageType {
+	FoundResponse = "FOUND_RESPONSE",
 	Braodcast = "BROADCAST",
 	DirectMessage = "DIRECT_MESSAGE",
 	PeerDiscovery = "PEER_DISCOVER",

@@ -57,12 +57,13 @@ class KademliaNode extends AbstractNode {
 	// node start function
 	public start = async () => {
 		const clostest = getIdealDistance();
-		const k_bucket_without_ping: Peer[] = [];
+		const hardcodedPeerList: Peer[] = [];
+
 		for (let i = 0; i < clostest.length; i++) {
 			const res = (this.nodeContact.nodeId ^ clostest[i].nodeId) as number;
-			k_bucket_without_ping.push(new Peer(res, this.address, res + 3000));
+			hardcodedPeerList.push(new Peer(res, this.address, res + 3000));
 		}
-		await this.table.updateTables(k_bucket_without_ping);
+		await this.table.updateTables(clostest);
 		await this.initDiscScheduler();
 	};
 
@@ -85,11 +86,12 @@ class KademliaNode extends AbstractNode {
 		const contacts = new Map<string, Peer>();
 		let iteration: number = null;
 		const shortlist = this.table.findNode(key, ALPHA);
-		await this.findNodeRecursiveSearch(contacts, shortlist, iteration);
+		const closeCandidate = shortlist[0];
+		await this.findNodeRecursiveSearch(contacts, shortlist, closeCandidate, iteration);
 		return Array.from(contacts.values());
 	};
 
-	private handleFindNodeQuery = async (contacts: Map<string, Peer>, node: Peer, nodeShortlist: Peer[]) => {
+	private handleFindNodeQuery = async (contacts: Map<string, Peer>, node: Peer, nodeShortlist: Peer[], candidate: Peer) => {
 		let hasCloserThanExist = false;
 		try {
 			const to = node.toJSON();
@@ -97,8 +99,8 @@ class KademliaNode extends AbstractNode {
 			const message = NodeUtils.createUdpMessage(MessageType.FindNode, data, this.nodeContact, to);
 			const findNodeResponse = this.udpTransport.sendMessage(message, this.udpMessageResolver);
 
-			const closeNodes = await findNodeResponse;
-			let initialClosestNode = nodeShortlist[0];
+			const closeNodes = await Promise.resolve(findNodeResponse);
+			let initialClosestNode = candidate;
 
 			contacts.set(node.nodeId.toString(), node);
 			for (const currentCloseNode of closeNodes) {
@@ -120,15 +122,20 @@ class KademliaNode extends AbstractNode {
 		return hasCloserThanExist;
 	};
 
-	private findNodeRecursiveSearch = async (contacts: Map<string, Peer>, nodeShortlist: Peer[], iteration: number) => {
+	private findNodeRecursiveSearch = async (
+		contacts: Map<string, Peer>,
+		nodeShortlist: Peer[],
+		candidate: Peer,
+		iteration: number,
+	) => {
 		const findNodePromises: Array<Promise<boolean>> = [];
 
 		iteration = iteration == null ? 0 : iteration + 1;
 		const alphaContacts = nodeShortlist.slice(iteration * ALPHA, iteration * ALPHA + ALPHA);
 
 		for (const node of alphaContacts) {
-			if (contacts.has(node.toString())) continue;
-			findNodePromises.push(this.handleFindNodeQuery(contacts, node, nodeShortlist));
+			if (contacts.has(node.nodeId.toString())) continue;
+			findNodePromises.push(this.handleFindNodeQuery(contacts, node, nodeShortlist, candidate));
 		}
 
 		if (!findNodePromises.length) {
@@ -140,7 +147,7 @@ class KademliaNode extends AbstractNode {
 		const isUpdatedClosest = results.some(Boolean);
 
 		if (isUpdatedClosest && contacts.size < BIT_SIZE) {
-			await this.findNodeRecursiveSearch(contacts, nodeShortlist, iteration);
+			await this.findNodeRecursiveSearch(contacts, nodeShortlist, candidate, iteration);
 		}
 	};
 
@@ -173,7 +180,7 @@ class KademliaNode extends AbstractNode {
 			try {
 				const promises = nodes.map((node) => {
 					const to = new Peer(node.nodeId, this.address, node.port);
-					const data = { resId: v4(), key, value: value, closestNodes };
+					const data = { resId: v4(), key };
 					const message = NodeUtils.createUdpMessage(MessageType.FindValue, data, this.nodeContact, to);
 					return this.udpTransport.sendMessage(message, this.udpMessageResolver);
 				});
@@ -217,8 +224,15 @@ class KademliaNode extends AbstractNode {
 					this.emitter.emit(`response_pong_${resId}`, { resId, error: null });
 					break;
 				}
+				case MessageType.FoundResponse: {
+					const m = (message as any).data.data;
+					const resId = m.resId;
+					this.udpTransport.messages.REPLY.set(resId, message);
+					this.emitter.emit(`response_findValue_${resId}`, { ...message, error: null });
+					break;
+				}
 				case MessageType.FindNode: {
-					const closestNodes = this.table.findNode(externalContact);
+					const closestNodes = this.table.findNode(externalContact, ALPHA);
 					const msgData = { resId: message.data.data.resId, closestNodes };
 
 					this.udpTransport.messages.FIND_NODE.set(message.data.data.resId, message);
@@ -227,11 +241,11 @@ class KademliaNode extends AbstractNode {
 				}
 				case MessageType.FindValue: {
 					const res = await this.table.findValue(message.data.data.key);
-					const closestNodes = isArray(res) ? res : message.data?.data.closestNodes;
-
 					const value = isArray(res) ? message.data?.data?.value : res;
-					const msgData = { ...message.data?.data, closestNodes, value };
-					await this.handleMessageResponse(MessageType.Reply, message, msgData);
+					await this.handleMessageResponse(MessageType.FoundResponse, message, {
+						resId: message.data.data.resId,
+						value,
+					});
 					break;
 				}
 				default:
@@ -245,8 +259,9 @@ class KademliaNode extends AbstractNode {
 
 	public udpMessageResolver = (params: any, resolve: (value?: unknown) => void, reject: (reason?: any) => void) => {
 		const { type, responseId } = params;
-		if (type === MessageType.Reply) resolve();
-		if (type === MessageType.Pong) resolve();
+		if (type === MessageType.Reply) resolve(params);
+		if (type === MessageType.Pong) resolve(params);
+		if (type === MessageType.FoundResponse) resolve(params);
 
 		this.emitter.once(`response_reply_${responseId}`, (data: any) => {
 			if (data.error) {
@@ -267,6 +282,13 @@ class KademliaNode extends AbstractNode {
 				return reject(data.error);
 			}
 			resolve(data);
+		});
+
+		this.emitter.once(`response_findValue_${responseId}`, (data: any) => {
+			if (data.error) {
+				return reject(data.error);
+			}
+			resolve(data.data.data.value);
 		});
 	};
 

@@ -86,7 +86,6 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
 
 				if (message.data.type === PacketType.Direct) {
 					this.messages.DIRECT_MESSAGE.set(message.data.id, message.data.message);
-					console.log(message.data.message);
 					this.emitter.emitDirect(message.data.message, message.data.origin);
 				}
 			},

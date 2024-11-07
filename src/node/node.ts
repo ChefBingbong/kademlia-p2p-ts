@@ -85,7 +85,7 @@ class KademliaNode extends AbstractNode {
 	private findNodes = async (key: number): Promise<Peer[]> => {
 		const contacts = new Map<string, Peer>();
 		let iteration: number = null;
-		const shortlist = this.table.findNode(key, ALPHA);
+		const shortlist = this.table.findNode(key);
 		const closeCandidate = shortlist[0];
 		await this.findNodeRecursiveSearch(contacts, shortlist, closeCandidate, iteration);
 		return Array.from(contacts.values());
@@ -157,13 +157,7 @@ class KademliaNode extends AbstractNode {
 
 		for (const nodes of closestNodesChunked) {
 			try {
-				const promises = nodes.map((node) => {
-					const data = { resId: v4(), key, value };
-					const to = new Peer(node.nodeId, this.address, node.port);
-					const message = NodeUtils.createUdpMessage(MessageType.Store, data, this.nodeContact, to);
-					return this.udpTransport.sendMessage(message, this.udpMessageResolver);
-				});
-
+				const promises = this.sendManyUdp(nodes, MessageType.FindValue, { key, value });
 				return await Promise.all(promises);
 			} catch (e) {
 				console.error(e);
@@ -175,17 +169,11 @@ class KademliaNode extends AbstractNode {
 		const key = hashKeyAndmapToKeyspace(value);
 		const closestNodes = await this.findNodes(key);
 		const closestNodesChunked = chunk<Peer>(closestNodes, ALPHA);
-
 		for (const nodes of closestNodesChunked) {
 			try {
-				const promises = nodes.map((node) => {
-					const to = new Peer(node.nodeId, this.address, node.port);
-					const data = { resId: v4(), key };
-					const message = NodeUtils.createUdpMessage(MessageType.FindValue, data, this.nodeContact, to);
-					return this.udpTransport.sendMessage(message, this.udpMessageResolver);
-				});
-
+				const promises = this.sendManyUdp(nodes, MessageType.FindValue, { key });
 				const resolved = await Promise.all(promises);
+
 				for await (const result of resolved) {
 					if (typeof result === "string") return result;
 					return null;
@@ -301,6 +289,15 @@ class KademliaNode extends AbstractNode {
 	public sendTcpTransportMessage = <T extends BroadcastData | DirectData>(type: MessageType, payload: T) => {
 		const message = NodeUtils.creatTcpMessage<T>(type, payload, this.nodeContact, this.nodeContact);
 		this.wsTransport.sendMessage<T>(message);
+	};
+
+	public sendManyUdp = (nodes: Peer[], type: MessageType, data?: any) => {
+		return nodes.map((node: Peer) => {
+			const to = new Peer(node.nodeId, this.address, node.port);
+			const payload = { resId: v4(), ...data };
+			const message = NodeUtils.createUdpMessage(type, payload, this.nodeContact, to);
+			return this.udpTransport.sendMessage(message, this.udpMessageResolver);
+		});
 	};
 
 	public getTransportMessages = (transport: Transports, type: MessageType) => {

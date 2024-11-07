@@ -1,5 +1,5 @@
 import * as dgram from "dgram";
-import { isArray } from "mathjs";
+import { unpack } from "msgpackr";
 import { v4 } from "uuid";
 import { DiscoveryScheduler } from "../discoveryScheduler/discoveryScheduler";
 import { App } from "../http/app";
@@ -11,7 +11,7 @@ import UDPTransport from "../transports/udp/udpTransport";
 import { MessageType, PacketType, Transports } from "../types/messageTypes";
 import { BroadcastData, DirectData, TcpPacket } from "../types/udpTransportTypes";
 import { extractError } from "../utils/extractError";
-import { chunk, extractNumber, getIdealDistance, hashKeyAndmapToKeyspace } from "../utils/nodeUtils";
+import { chunk, getIdealDistance, hashKeyAndmapToKeyspace } from "../utils/nodeUtils";
 import AbstractNode from "./abstractNode/abstractNode";
 import { ALPHA, BIT_SIZE } from "./constants";
 import { NodeUtils } from "./nodeUtils";
@@ -85,7 +85,7 @@ class KademliaNode extends AbstractNode {
 	private findNodes = async (key: number): Promise<Peer[]> => {
 		const contacts = new Map<string, Peer>();
 		let iteration: number = null;
-		const shortlist = this.table.findNode(key);
+		const shortlist = this.table.findNode(key, ALPHA);
 		const closeCandidate = shortlist[0];
 		await this.findNodeRecursiveSearch(contacts, shortlist, closeCandidate, iteration);
 		return Array.from(contacts.values());
@@ -117,7 +117,7 @@ class KademliaNode extends AbstractNode {
 		} catch (e) {
 			const errorMessage = extractError(e);
 			this.log.info(`message: ${errorMessage}, fn: handleFindNodeQuery`);
-			this.handleTcpDisconnet(extractNumber(errorMessage) - 3000);
+			// this.handleTcpDisconnet(extractNumber(errorMessage) - 3000);
 		}
 		return hasCloserThanExist;
 	};
@@ -152,12 +152,12 @@ class KademliaNode extends AbstractNode {
 	};
 
 	public async store(key: number, value: string) {
-		const closestNodes = await this.findNodes(this.nodeId);
+		const closestNodes = this.table.getAllPeers();
 		const closestNodesChunked = chunk<Peer>(closestNodes, ALPHA);
 
 		for (const nodes of closestNodesChunked) {
 			try {
-				const promises = this.sendManyUdp(nodes, MessageType.FindValue, { key, value });
+				const promises = this.sendManyUdp(nodes, MessageType.Store, { key, value });
 				return await Promise.all(promises);
 			} catch (e) {
 				console.error(e);
@@ -167,7 +167,8 @@ class KademliaNode extends AbstractNode {
 
 	public async findValue(value: string) {
 		const key = hashKeyAndmapToKeyspace(value);
-		const closestNodes = await this.findNodes(key);
+		const closeNodesRes = await fetch(`http://localhost:${key + 2000}/getPeers`);
+		const { peers: closestNodes } = await closeNodesRes.json();
 		const closestNodesChunked = chunk<Peer>(closestNodes, ALPHA);
 		for (const nodes of closestNodesChunked) {
 			try {
@@ -186,7 +187,7 @@ class KademliaNode extends AbstractNode {
 
 	public handleMessage = async (msg: Buffer, info: dgram.RemoteInfo) => {
 		try {
-			const message = JSON.parse(msg.toString()) as Message<StoreData>;
+			const message = unpack(msg) as Message<StoreData>;
 			const externalContact = message.from.nodeId;
 			await this.table.updateTables(new Peer(message.from.nodeId, this.address, message.from.port));
 
@@ -209,6 +210,7 @@ class KademliaNode extends AbstractNode {
 				}
 				case MessageType.Pong: {
 					const resId = message.data.data.resId;
+					console.log(resId);
 					this.emitter.emit(`response_pong_${resId}`, { resId, error: null });
 					break;
 				}
@@ -229,7 +231,7 @@ class KademliaNode extends AbstractNode {
 				}
 				case MessageType.FindValue: {
 					const res = await this.table.findValue(message.data.data.key);
-					const value = isArray(res) ? message.data?.data?.value : res;
+					const value = res;
 					await this.handleMessageResponse(MessageType.FoundResponse, message, {
 						resId: message.data.data.resId,
 						value,
@@ -357,14 +359,6 @@ class KademliaNode extends AbstractNode {
 		for (const peer of closestPeers) {
 			const peerId = peer.nodeId.toString();
 
-			if (peer.getIsNodeStale() && this.nodeId !== peer.nodeId) {
-				const connection = ws.connections.get(peerId);
-				if (connection) {
-					await connection.close();
-					ws.connections.delete(peerId);
-					ws.neighbors.delete(peerId);
-				}
-			}
 			if (!ws.connections.has(peerId)) {
 				this.wsTransport.connect(peer.port, () => {
 					console.log(`Connection from ${this.nodeId} to ${peer.port} established.`);

@@ -1,4 +1,5 @@
 import dgram from "dgram";
+import { pack } from "msgpackr";
 import { Message, MessagePayload, UDPDataInfo } from "../../message/message";
 import { Peer } from "../../peer/peer";
 import { MessageType } from "../../types/messageTypes";
@@ -43,8 +44,7 @@ class UDPTransport extends AbstractTransport<dgram.Socket, BaseMessageType> {
 	): Promise<Peer[] | undefined> => {
 		try {
 			const nodeResponse = new Promise<Peer[]>((resolve, reject) => {
-				const payload = JSON.stringify({ ...message });
-
+				const payload = pack(message);
 				this.server.send(payload, message.to.port, this.address, () => {
 					const args = { type: message.type, data: message.data, responseId: message.data.data.resId };
 					callback(args, resolve, reject);

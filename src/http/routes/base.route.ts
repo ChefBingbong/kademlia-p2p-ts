@@ -25,6 +25,7 @@ class BaseRoute implements Routes {
 		this.router.post(`${this.path}postBroadcast`, this.baseController.postBroadcast);
 		this.router.get(`${this.path}store/:key/:value`, this.baseController.storeValue);
 		this.router.get(`${this.path}findValue/:key`, this.baseController.findValue);
+		this.router.get(`${this.path}getPeers`, this.baseController.getNodePeers);
 	}
 }
 

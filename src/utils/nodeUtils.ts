@@ -82,7 +82,7 @@ export function bucketIndex(a: Buffer, b: Buffer) {
 
 export function timeoutReject<R = unknown>(error?: Error): Promise<never | R> {
 	return new Promise<R>((_, rej) => {
-		setTimeout(() => rej(error ?? new Error("timeout")), 5000);
+		setTimeout(() => rej(error ?? new Error("timeout")), 60000);
 	});
 }
 

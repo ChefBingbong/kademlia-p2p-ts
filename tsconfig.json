@@ -22,7 +22,7 @@
 		"outDir": "./dist"
 	},
 	"exclude": ["dist", "node_modules", "**/node_modules/**/*", "**/dist/**/*"],
-	"include": ["src/**/*.ts", "test/**/*.ts"],
+	"include": ["src/**/*.ts", "test/**/*.ts", "src/simulation.ts"],
 	"compileOnSave": true,
 	"typeAcquisition": {
 		"enable": true

@@ -70,7 +70,6 @@ class BaseController {
 
 	public findClosestNode = (req: Request, res: Response, next: NextFunction) => {
 		try {
-			console.log(req.params.id);
 			const closest = this.node.table.findClosestNode(Number(req.params.id));
 			return res.json({ result: closest });
 		} catch (error) {

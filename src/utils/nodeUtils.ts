@@ -106,7 +106,6 @@ export function chunk<T = any>(arr: T[], count: number): T[][] {
 export const extractNumber = (message: string) => {
 	const regex = /TIMEOUT:\s*(\d+)/;
 	const match = message.match(regex);
-	console.log(match);
 	return match ? Number(match[1]) : null;
 };
 

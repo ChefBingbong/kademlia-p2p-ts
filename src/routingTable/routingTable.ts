@@ -112,7 +112,7 @@ class RoutingTable {
 		};
 
 		const canIterateBelow = () => {
-			return belowIndex > 0;
+			return belowIndex >= 0;
 		};
 
 		while (true) {

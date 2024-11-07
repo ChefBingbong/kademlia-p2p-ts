@@ -11,7 +11,7 @@ import UDPTransport from "../transports/udp/udpTransport";
 import { MessageType, PacketType, Transports } from "../types/messageTypes";
 import { BroadcastData, DirectData, TcpPacket } from "../types/udpTransportTypes";
 import { extractError } from "../utils/extractError";
-import { chunk, getIdealDistance, hashKeyAndmapToKeyspace } from "../utils/nodeUtils";
+import { chunk, extractNumber, getIdealDistance, hashKeyAndmapToKeyspace } from "../utils/nodeUtils";
 import AbstractNode from "./abstractNode/abstractNode";
 import { ALPHA, BIT_SIZE } from "./constants";
 import { NodeUtils } from "./nodeUtils";
@@ -28,13 +28,9 @@ class KademliaNode extends AbstractNode {
 	public readonly wsTransport: WebSocketTransport;
 
 	private readonly discScheduler: DiscoveryScheduler;
-	private contactedPeers: Map<string, Peer>;
-	private failedContacts: Map<string, Peer>;
-
 	constructor(id: number, port: number) {
 		super(id, port, "kademlia");
 		this.nodeContact = new Peer(this.nodeId, this.address, this.port);
-		this.discScheduler = new DiscoveryScheduler({ jobId: "discScheduler" });
 
 		this.udpTransport = new UDPTransport(this.nodeId, this.port);
 		this.wsTransport = new WebSocketTransport(this.nodeId, this.port);
@@ -42,6 +38,7 @@ class KademliaNode extends AbstractNode {
 		this.api = new App(this, this.port - 1000);
 		this.table = new RoutingTable(this.nodeId, this);
 		this.listen();
+		this.discScheduler = new DiscoveryScheduler({ jobId: "discScheduler" });
 	}
 
 	// register transport listeners
@@ -60,7 +57,12 @@ class KademliaNode extends AbstractNode {
 	// node start function
 	public start = async () => {
 		const clostest = getIdealDistance();
-		await this.table.updateTables(clostest);
+		const k_bucket_without_ping: Peer[] = [];
+		for (let i = 0; i < clostest.length; i++) {
+			const res = (this.nodeContact.nodeId ^ clostest[i].nodeId) as number;
+			k_bucket_without_ping.push(new Peer(res, this.address, res + 3000));
+		}
+		await this.table.updateTables(k_bucket_without_ping);
 		await this.initDiscScheduler();
 	};
 
@@ -111,9 +113,10 @@ class KademliaNode extends AbstractNode {
 				}
 			}
 		} catch (e) {
-			this.log.info(`message: ${extractError(e)}, fn: handleFindNodeQuery`);
+			const errorMessage = extractError(e);
+			this.log.info(`message: ${errorMessage}, fn: handleFindNodeQuery`);
+			this.handleTcpDisconnet(extractNumber(errorMessage) - 3000);
 		}
-
 		return hasCloserThanExist;
 	};
 

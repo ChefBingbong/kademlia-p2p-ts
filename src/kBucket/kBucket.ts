@@ -31,12 +31,12 @@ export class KBucket {
 	};
 
 	public removeNode = (peer: Peer) => {
-		this.nodes = this.nodes.filter((node: Peer) => node.nodeId !== peer.nodeId);
+		this.nodes = this.nodes.filter((n) => n.nodeId !== peer.nodeId);
 	};
 
 	public containsNode = (peer: Peer) => {
 		const peers = this.getNodes();
-		return peers.find((node: Peer) => node.nodeId === peer.nodeId);
+		return peers.find((node: Peer) => node.nodeId !== peer.nodeId);
 	};
 
 	public async updateBucketNode(peer: Peer) {
@@ -61,7 +61,7 @@ export class KBucket {
 			const to = this.nodes[0].toJSON();
 			const data = { resId: v4() };
 			const message = NodeUtils.createUdpMessage<UDPDataInfo>(MessageType.Ping, data, this.node.nodeContact, to);
-			await this.node.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(message, this.node.udpMessageResolver);
+			return await this.node.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(message, this.node.udpMessageResolver);
 		} catch (e) {
 			this.nodes.shift();
 			if (!this.containsNode(peer)) {

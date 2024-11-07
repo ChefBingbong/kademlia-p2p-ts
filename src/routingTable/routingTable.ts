@@ -112,7 +112,7 @@ class RoutingTable {
 		};
 
 		const canIterateBelow = () => {
-			return belowIndex >= 0;
+			return belowIndex > 0;
 		};
 
 		while (true) {
@@ -140,14 +140,7 @@ class RoutingTable {
 		}
 
 		closestNodes.sort((a, b) => a.distance - b.distance);
-		// const trimmedNodes = this.reduceNodes(closestNodes, BIT_SIZE);
 		return closestNodes.map((c) => c.node);
-	}
-	private reduceNodes(nodes: CloseNodes[], size: number): CloseNodes[] {
-		if (nodes.length > size) {
-			nodes.splice(size);
-		}
-		return nodes;
 	}
 
 	private addNodes(key: number, bucketIndex: number, closestNodes: CloseNodes[]) {

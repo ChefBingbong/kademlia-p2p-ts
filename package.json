@@ -8,7 +8,7 @@
 	"scripts": {
 		"build": "tsc",
 		"start": "npx ts-node src/index.ts",
-		"start:dev": "tsc && node ./dist/simulation.js",
+		"start:dev": "npx ts-node src/simulation.ts",
 		"format:check:staged": "lint-staged",
 		"format:check": "biome format .",
 		"format:write": "biome format . --write",
@@ -21,6 +21,7 @@
 	"license": "ISC",
 	"dependencies": {
 		"@types/ws": "^8.5.12",
+		"any-signal": "^3.0.1",
 		"axios": "^1.6.0",
 		"bignumber.js": "^9.1.2",
 		"body-parser": "^1.20.2",
@@ -62,7 +63,7 @@
 		"jest-mock-extended": "3.0.7",
 		"lint-staged": "^15.2.9",
 		"ts-jest": "^29.2.4",
-		"typescript": "^5.1.3"
+		"typescript": "^5.4.2"
 	},
 	"engines": {
 		"node": "^18.0.0"

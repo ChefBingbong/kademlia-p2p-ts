@@ -1,9 +1,9 @@
 {
 	"compilerOptions": {
-		"target": "es2017",
+		"target": "es2023",
 		"types": ["node"],
 		"typeRoots": ["node_modules/@types", "typings"],
-		"lib": ["es2015", "es2016", "es2017", "es2018", "dom"],
+		"lib": ["es2021", "es2015", "es2016", "es2017", "es2018", "dom"],
 		"module": "CommonJS",
 		"moduleResolution": "node",
 		"sourceMap": true,

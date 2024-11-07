@@ -11,12 +11,12 @@ const envVars = {
 	PORT: process.env.PORT,
 };
 
-// try {
-// 		// const validatedEnvs = envsSchema.parse(envVars);
-// 		// console.log(validatedEnvs);
-// 	} catch (error) {
-// 	console.error("Error validating environment variables:", error);
-// }
+try {
+	const validatedEnvs = envsSchema.parse(envVars);
+	console.log(validatedEnvs);
+} catch (error) {
+	console.error("Error validating environment variables:", error);
+}
 
 // map env vars and make it visible outside module
 export default {

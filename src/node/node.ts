@@ -122,12 +122,7 @@ class KademliaNode extends AbstractNode {
 		return hasCloserThanExist;
 	};
 
-	private findNodeRecursiveSearch = async (
-		contacts: Map<string, Peer>,
-		nodeShortlist: Peer[],
-		candidate: Peer,
-		iteration: number,
-	) => {
+	private findNodeRecursiveSearch = async (contacts: Map<string, Peer>, nodeShortlist: Peer[], candidate: Peer, iteration: number) => {
 		const findNodePromises: Array<Promise<boolean>> = [];
 
 		iteration = iteration == null ? 0 : iteration + 1;
@@ -171,6 +166,7 @@ class KademliaNode extends AbstractNode {
 	public async findValue(value: string) {
 		const key = hashKeyAndmapToKeyspace(value);
 		const closeNodesRes = await fetch(`http://localhost:${key + 2000}/getPeers`);
+
 		const { peers: closestNodes } = await closeNodesRes.json();
 		const closestNodesChunked = chunk<Peer>(closestNodes, ALPHA);
 		for (const nodes of closestNodesChunked) {
@@ -210,10 +206,7 @@ class KademliaNode extends AbstractNode {
 				case MessageType.Reply: {
 					const resId = message.data.data.resId;
 					this.udpTransport.messages.REPLY.set(message.data.data.resId, message);
-					this.emitter.emit(`response_reply_${resId}`, {
-						...message.data?.data,
-						error: null,
-					});
+					this.emitter.emit(`response_reply_${resId}`, { ...message.data?.data, error: null });
 					break;
 				}
 				case MessageType.Pong: {
@@ -223,12 +216,8 @@ class KademliaNode extends AbstractNode {
 				}
 				case MessageType.FoundResponse: {
 					const m = (message as any).data.data;
-					const resId = m.resId;
-					this.udpTransport.messages.REPLY.set(resId, message);
-					this.emitter.emit(`response_findValue_${resId}`, {
-						...message,
-						error: null,
-					});
+					this.udpTransport.messages.REPLY.set(m.resId, message);
+					this.emitter.emit(`response_findValue_${m.resId}`, { ...message, error: null });
 					break;
 				}
 				case MessageType.FindNode: {
@@ -242,10 +231,7 @@ class KademliaNode extends AbstractNode {
 				case MessageType.FindValue: {
 					const res = await this.table.findValue(message.data.data.key);
 					const value = res;
-					await this.handleMessageResponse(MessageType.FoundResponse, message, {
-						resId: message.data.data.resId,
-						value,
-					});
+					await this.handleMessageResponse(MessageType.FoundResponse, message, { resId: message.data.data.resId, value });
 					break;
 				}
 				default:
@@ -270,9 +256,7 @@ class KademliaNode extends AbstractNode {
 			if (data?.value) {
 				resolve(data.value);
 			} else {
-				const nodes = data.closestNodes.map((node: PeerJSON) =>
-					Peer.fromJSON(node.nodeId, this.address, node.port, node.lastSeen),
-				);
+				const nodes = data.closestNodes.map((node: PeerJSON) => Peer.fromJSON(node.nodeId, this.address, node.port, node.lastSeen));
 				resolve(nodes);
 			}
 		});

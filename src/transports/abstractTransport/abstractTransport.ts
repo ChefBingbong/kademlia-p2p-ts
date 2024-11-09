@@ -44,9 +44,7 @@ abstract class AbstractTransport<TransportType extends dgram.Socket | Server, TM
 
 	abstract onMessage<T extends (args?: any) => Promise<void>, R extends PacketType>(callback: T, type?: R): void;
 
-	abstract sendMessage<T extends TcpPacket<BroadcastData | DirectData> & MessagePayload<UDPDataInfo>>(
-		message: Message<T>,
-	): void;
+	abstract sendMessage<T extends TcpPacket<BroadcastData | DirectData> & MessagePayload<UDPDataInfo>>(message: Message<T>): void;
 }
 
 export default AbstractTransport;

@@ -9,7 +9,7 @@
 		"indentStyle": "tab",
 		"indentWidth": 4,
 		"lineEnding": "lf",
-		"lineWidth": 130,
+		"lineWidth": 140,
 		"attributePosition": "auto",
 		"ignore": ["**/src/blockchain/abi", "**/src/blockchain/type"]
 	},
@@ -72,7 +72,7 @@
 			"bracketSameLine": false,
 			"quoteStyle": "double",
 			"attributePosition": "auto",
-			"lineWidth": 130,
+			"lineWidth": 140,
 			"indentStyle": "tab",
 			"indentWidth": 4
 		}
@@ -83,7 +83,7 @@
 			"formatter": {
 				"enabled": true,
 				"indentStyle": "tab",
-				"lineWidth": 130,
+				"lineWidth": 140,
 				"indentWidth": 4
 			}
 		}

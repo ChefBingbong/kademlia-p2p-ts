@@ -96,8 +96,7 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
 	};
 
 	public listen(cb?: () => void): (cb?: any) => void {
-		if (!this.isInitialized)
-			throw new ErrorWithCode(`Cannot listen before server is initialized`, ProtocolError.PARAMETER_ERROR);
+		if (!this.isInitialized) throw new ErrorWithCode(`Cannot listen before server is initialized`, ProtocolError.PARAMETER_ERROR);
 
 		this.connect(this.port, () => {
 			console.log(`Connection to ${this.port} established.`);
@@ -166,28 +165,18 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
 		}
 	};
 
-	private send = <T extends TcpData>(
-		nodeId: string,
-		type: "message" | "handshake",
-		data: Message<TcpPacket<T>> | HandShake,
-	) => {
+	private send = <T extends TcpData>(nodeId: string, type: "message" | "handshake", data: Message<TcpPacket<T>> | HandShake) => {
 		const connectionId = this.neighbors.get(nodeId) ?? nodeId;
 		const socket = this.connections.get(connectionId);
 
 		if (!socket)
-			throw new ErrorWithCode(
-				`Attempt to send data to connection that does not exist ${connectionId}`,
-				ProtocolError.INTERNAL_ERROR,
-			);
+			throw new ErrorWithCode(`Attempt to send data to connection that does not exist ${connectionId}`, ProtocolError.INTERNAL_ERROR);
 
 		socket.send(JSON.stringify({ type, data }));
 	};
 
 	// event handler logic
-	public onMessage<T extends (message: TcpPacket<BroadcastData | DirectData>) => Promise<void>, R = PacketType>(
-		callback: T,
-		type: R,
-	) {
+	public onMessage<T extends (message: TcpPacket<BroadcastData | DirectData>) => Promise<void>, R = PacketType>(callback: T, type: R) {
 		switch (type) {
 			case PacketType.Broadcast:
 				this.on("broadcast", async <T extends BroadcastData>(message: TcpPacket<T>) => {
@@ -196,10 +185,7 @@ class WebSocketTransport extends AbstractTransport<Server, BaseMessageType> {
 					} catch (e) {
 						const error = extractError(e);
 						this.log.error(error);
-						throw new ErrorWithCode(
-							`Error prcessing broadcast message for ${this.port}`,
-							ProtocolError.INTERNAL_ERROR,
-						);
+						throw new ErrorWithCode(`Error prcessing broadcast message for ${this.port}`, ProtocolError.INTERNAL_ERROR);
 					}
 				});
 				break;

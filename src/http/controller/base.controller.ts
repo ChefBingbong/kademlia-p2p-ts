@@ -14,6 +14,10 @@ class BaseController {
 		return res.json({ message: "succes" });
 	};
 
+	public getNodePeers = async (req: Request, res: Response, next: NextFunction) => {
+		return res.json({ peers: this.node.table.getAllPeers() });
+	};
+
 	public getNodeBuckets = async (req: Request, res: Response, next: NextFunction) => {
 		return res.json({ message: this.node.table.getAllBuckets() });
 	};

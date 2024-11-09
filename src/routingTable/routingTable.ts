@@ -58,8 +58,8 @@ class RoutingTable {
 		await Promise.all(contacts);
 	}
 
-	public removeBucket = (peer: Peer) => {
-		const bucketIndex = this.getBucketIndex(peer.nodeId);
+	public removeBucket = (bucketIndex: number) => {
+		// const bucketIndex = this.getBucketIndex(peer.nodeId);
 		this.buckets.delete(bucketIndex);
 	};
 
@@ -69,7 +69,9 @@ class RoutingTable {
 	};
 
 	public getAllBuckets = () => {
-		let bucketsJson: { [key: number]: typeof KBucket.prototype.toJSON.prototype } = {};
+		let bucketsJson: {
+			[key: number]: typeof KBucket.prototype.toJSON.prototype;
+		} = {};
 		for (const bucket of this.buckets.values()) {
 			bucketsJson[bucket.bucketId] = bucket.toJSON();
 		}
@@ -139,7 +141,7 @@ class RoutingTable {
 			}
 		}
 
-		closestNodes.sort((a, b) => a.distance - b.distance);
+		closestNodes.sort((a, b) => b.distance - a.distance).slice(0, count);
 		return closestNodes.map((c) => c.node);
 	}
 

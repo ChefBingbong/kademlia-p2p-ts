@@ -36,7 +36,7 @@ export class KBucket {
 
 	public containsNode = (peer: Peer) => {
 		const peers = this.getNodes();
-		return peers.find((node: Peer) => node.nodeId !== peer.nodeId);
+		return peers.find((node: Peer) => node.nodeId === peer.nodeId);
 	};
 
 	public async updateBucketNode(peer: Peer) {
@@ -50,23 +50,25 @@ export class KBucket {
 		}
 
 		if (this.nodes.length < K_BUCKET_SIZE) {
-			if (!this.containsNode(peer)) {
-				this.nodes.push(peer);
-			}
+			//   if (!this.containsNode(peer)) {
+			this.nodes.push(peer);
+			//   }
 			return;
 		}
 		try {
-			if (this.node.nodeContact.nodeId === this.nodes[0].nodeId) return;
+			if (this.node.nodeContact.nodeId === this.nodes.reverse()[0].nodeId) return;
 			// try check if node is only lone if not remove its id from the nodes arr
-			const to = this.nodes[0].toJSON();
+
+			const to = this.nodes.reverse()[0].toJSON();
 			const data = { resId: v4() };
 			const message = NodeUtils.createUdpMessage<UDPDataInfo>(MessageType.Ping, data, this.node.nodeContact, to);
 			return await this.node.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(message, this.node.udpMessageResolver);
 		} catch (e) {
+			console.log(e);
 			this.nodes.shift();
-			if (!this.containsNode(peer)) {
-				this.nodes.push(peer);
-			}
+			//   if (!this.containsNode(peer)) {
+			this.nodes.push(peer);
+			//   }
 		}
 	}
 

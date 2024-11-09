@@ -1,4 +1,4 @@
-import { MessageQueue, Queue } from "./types";
+import { MessageQueue, Queue } from "../types/messageTypes";
 
 export class MessageQueueMap<T> {
 	private queueMap: MessageQueue<T>;

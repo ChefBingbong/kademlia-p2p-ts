@@ -65,9 +65,9 @@ export class KBucket {
 			return await this.node.udpTransport.sendMessage<MessagePayload<UDPDataInfo>>(message, this.node.udpMessageResolver);
 		} catch (e) {
 			console.log(e);
-			this.nodes.shift();
+			// this.nodes.shift();
 			//   if (!this.containsNode(peer)) {
-			this.nodes.push(peer);
+			// this.nodes.push(peer);
 			//   }
 		}
 	}

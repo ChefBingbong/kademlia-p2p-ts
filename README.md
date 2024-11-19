@@ -98,9 +98,9 @@ to use this and run the keygen process yourself. first clone the repo run
 ```bash
 pnpm install
 ```
-then in order to start the serice export a default env for the boostrap node 3000 (fake bootstrap) ```
+then in order to start the serice export a default env for the boostrap node 3000 (fake bootstrap) or and easier way is to open up a bash terminal and run the following commands to set up env vars (its recommended to run d=the dev script when testing or just trying out the service ```
 ```
-export PORT=3000
+export NODE_ENV=development PORT=3000
 nvm use 18.20.0
 pnpm start // for single node (prod script)
 

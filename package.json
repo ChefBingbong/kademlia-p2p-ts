@@ -8,7 +8,7 @@
 	"scripts": {
 		"build": "tsc",
 		"start": "npx ts-node src/index.ts",
-		"start:dev": "tsc && node ./dist/simulation.js",
+		"start:dev": "npx ts-node ./src/simulation.ts",
 		"format:check:staged": "lint-staged",
 		"format:check": "biome format .",
 		"format:write": "biome format . --write",
@@ -16,7 +16,12 @@
 		"prepare": "husky install",
 		"test": "vitest run --pool=forks"
 	},
-	"keywords": ["kademlia", "p2p", "dht", "ws"],
+	"keywords": [
+		"kademlia",
+		"p2p",
+		"dht",
+		"ws"
+	],
 	"author": "zeroExBingbong",
 	"license": "ISC",
 	"dependencies": {
@@ -41,6 +46,7 @@
 		"node-cron": "^3.0.3",
 		"nodemon": "^3.0.1",
 		"ts-node": "^10.9.1",
+		"tslib": "^2.8.1",
 		"uuid": "^10.0.0",
 		"vite-tsconfig-paths": "^5.1.0",
 		"vitest": "^1.4.0",

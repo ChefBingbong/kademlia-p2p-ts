@@ -112,9 +112,17 @@ You can then observe the peer doscvery process and begin to interact with each n
 
 ### Other methods
 ```bash
-GET- http://localhost:3001/getBucketNodes/:port
+GET- http://localhost:3001/getBucketNodes
 ```
 returns a nodes buckets and all of the peers stored in each
+```bash
+GET- http://localhost:3001/store/value
+```
+stores a value on a given node
+```bash
+GET- http://localhost:3001/findValue/value
+```
+returns a previously stored value in he DHT
 
 ```bash
 GET- http://localhost:3001/getNodeMessages

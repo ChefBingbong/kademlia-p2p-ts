@@ -113,7 +113,7 @@ You can then observe the peer doscvery process and begin to interact with each n
 ### Other methods
 note when using something like post man to call these GET endpoints. the http server is always deployed at port 2000 + nodeiD
 ```bash
-GET- http://localhost:3001/getBucketNodes
+GET- http://localhost:2001/getBucketNodes
 ```
 returns a nodes buckets and all of the peers stored in each
 ```bash
@@ -121,27 +121,27 @@ GET- http://localhost:3001/store/value
 ```
 stores a value on a given node
 ```bash
-GET- http://localhost:3001/findValue/value
+GET- http://localhost:2001/findValue/value
 ```
 returns a previously stored value in he DHT
 
 ```bash
-GET- http://localhost:3001/getNodeMessages
+GET- http://localhost:2001/getNodeMessages
 ```
 returns all TCP (Websocket) messages that a node has recieved
 
 ```bash
-GET- http://localhost:3001/getNodeUdpMessages
+GET- http://localhost:2001/getNodeUdpMessages
 ```
 returns all UDP node discovery messages that a node has recieved
 
 ```bash
-POST- http://localhost:3001/postDirectMessage
+POST- http://localhost:2001/postDirectMessage
 ```
 send a direct message to a node
 
 ```bash
-GET- http://localhost:3001/postBroadcastMessage
+GET- http://localhost:2001/postBroadcastMessage
 ```
 send a message to all peers of a given node. the message will propagate throughout the entire network when every node does this.
 

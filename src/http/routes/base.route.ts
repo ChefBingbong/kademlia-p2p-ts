@@ -14,7 +14,7 @@ class BaseRoute implements Routes {
 	}
 
 	private initializeRoutes(): void {
-		this.router.get(`${this.path}getBucketNodes/:port`, this.baseController.getNodeBuckets);
+		this.router.get(`${this.path}getBucketNodes`, this.baseController.getNodeBuckets);
 		this.router.get(`${this.path}ping`, this.baseController.ping);
 
 		this.router.get(`${this.path}getNodeMessages`, this.baseController.getNodeMessages);
@@ -23,7 +23,7 @@ class BaseRoute implements Routes {
 
 		this.router.post(`${this.path}postDirectMessage`, this.baseController.postDirectMessage);
 		this.router.post(`${this.path}postBroadcast`, this.baseController.postBroadcast);
-		this.router.get(`${this.path}store/:key/:value`, this.baseController.storeValue);
+		this.router.get(`${this.path}store/:value`, this.baseController.storeValue);
 		this.router.get(`${this.path}findValue/:key`, this.baseController.findValue);
 		this.router.get(`${this.path}getPeers`, this.baseController.getNodePeers);
 	}

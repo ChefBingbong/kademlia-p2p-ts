@@ -111,6 +111,7 @@ pnpm run start:dev // to run 16 nodes concurrently (dev script)
 You can then observe the peer doscvery process and begin to interact with each nodes HTTP API for getting node information and sending messages
 
 ### Other methods
+note when using something like post man to call these GET endpoints. the http server is always deployed at port 2000 + nodeiD
 ```bash
 GET- http://localhost:3001/getBucketNodes
 ```

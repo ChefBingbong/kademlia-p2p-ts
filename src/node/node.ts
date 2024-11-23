@@ -78,9 +78,10 @@ class KademliaNode extends AbstractNode {
 
 	private findNodes = async (key: number): Promise<Peer[]> => {
 		const contacts = new Map<string, Peer>();
-		let iteration: number = null;
 		const shortlist = this.table.findNode(key, ALPHA);
+
 		const closeCandidate = shortlist[0];
+		let iteration: number = null;
 		await this.findNodeRecursiveSearch(contacts, shortlist, closeCandidate, iteration);
 		return Array.from(contacts.values());
 	};

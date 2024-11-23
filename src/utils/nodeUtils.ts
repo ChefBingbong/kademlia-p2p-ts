@@ -8,44 +8,19 @@ export const XOR = (n1: number, n2: number) => {
 };
 
 export function getIdealDistance() {
-	const IDEAL_DISTANCE: Peer[] = [];
+	const clostest: Peer[] = [];
 	for (let i = 0; i < BIT_SIZE; i++) {
 		const val = 2 ** i;
-		IDEAL_DISTANCE.push(new Peer(val, "127.0.0.1", val + 3000));
-	}
-	return IDEAL_DISTANCE;
-}
-
-// * Experimental Distance with Hex
-export function distance(nodeId1: string, nodeId2: string): number {
-	const buffer1 = Buffer.from(nodeId1, "hex");
-	const buffer2 = Buffer.from(nodeId2, "hex");
-	let result = 0;
-	for (let i = 0; i < buffer1.length; i++) {
-		result ^= buffer1[i] ^ buffer2[i];
-	}
-	return result;
-}
-
-// ! NOTE: Dumb way probability will no distributed evenly
-export function generateRandomBN(): string {
-	let binaryNumber = "";
-	for (let i = 0; i < BIT_SIZE; i++) {
-		const bit = Math.random() < 0.5 ? "0" : "1";
-		binaryNumber += bit;
-	}
-	return binaryNumber;
-}
-
-export function xor(a: Buffer, b: Buffer) {
-	const length = Math.max(a.length, b.length);
-	const buffer = Buffer.allocUnsafe(length);
-
-	for (let i = 0; i < length; ++i) {
-		buffer[i] = a[i] ^ b[i];
+		clostest.push(new Peer(val, "127.0.0.1", val + 3000));
 	}
 
-	return buffer;
+	const hardcodedPeerList: Peer[] = [];
+
+	for (let i = 0; i < clostest.length; i++) {
+		const res = (this.nodeContact.nodeId ^ clostest[i].nodeId) as number;
+		hardcodedPeerList.push(new Peer(res, this.address, res + 3000));
+	}
+	return hardcodedPeerList;
 }
 
 export function getKBucketIndex(nodeId: number, targetId: number): number {
@@ -56,28 +31,6 @@ export function getKBucketIndex(nodeId: number, targetId: number): number {
 		if (xorResult & (1 << i)) return i;
 	}
 	return 0;
-}
-
-export function bucketIndex(a: Buffer, b: Buffer) {
-	const d = xor(a, b);
-	let B = HASH_SIZE;
-
-	for (let i = 0; i < d.length; i++) {
-		if (d[i] === 0) {
-			B -= 8;
-			continue;
-		}
-
-		for (let j = 0; j < 8; j++) {
-			if (d[i] & (0x80 >> j)) {
-				return --B;
-			}
-
-			B--;
-		}
-	}
-
-	return B;
 }
 
 export function timeoutReject<R = unknown>(error?: Error): Promise<never | R> {

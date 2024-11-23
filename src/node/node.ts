@@ -11,7 +11,7 @@ import UDPTransport from "../transports/udp/udpTransport";
 import { MessageType, PacketType, Transports } from "../types/messageTypes";
 import { BroadcastData, DirectData, TcpPacket } from "../types/udpTransportTypes";
 import { extractError } from "../utils/extractError";
-import { chunk, getIdealDistance, hashKeyAndmapToKeyspace } from "../utils/nodeUtils";
+import { chunk, hashKeyAndmapToKeyspace } from "../utils/nodeUtils";
 import AbstractNode from "./abstractNode/abstractNode";
 import { ALPHA, BIT_SIZE } from "./constants";
 import { NodeUtils } from "./nodeUtils";
@@ -56,13 +56,7 @@ class KademliaNode extends AbstractNode {
 
 	// node start function
 	public start = async () => {
-		const clostest = getIdealDistance();
-		const hardcodedPeerList: Peer[] = [];
-
-		for (let i = 0; i < clostest.length; i++) {
-			const res = (this.nodeContact.nodeId ^ clostest[i].nodeId) as number;
-			hardcodedPeerList.push(new Peer(res, this.address, res + 3000));
-		}
+		// const clostest = getIdealDistance();
 		await this.table.updateTables(new Peer(0, this.address, 3000));
 		await this.initDiscScheduler();
 	};
@@ -98,11 +92,11 @@ class KademliaNode extends AbstractNode {
 			const data = { resId: v4() };
 			const message = NodeUtils.createUdpMessage(MessageType.FindNode, data, this.nodeContact, to);
 			const findNodeResponse = this.udpTransport.sendMessage(message, this.udpMessageResolver);
-
 			const closeNodes = await Promise.resolve(findNodeResponse);
-			let initialClosestNode = candidate;
 
+			let initialClosestNode = candidate;
 			contacts.set(node.nodeId.toString(), node);
+
 			for (const currentCloseNode of closeNodes) {
 				nodeShortlist.push(currentCloseNode);
 

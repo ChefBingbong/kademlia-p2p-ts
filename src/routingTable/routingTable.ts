@@ -109,34 +109,18 @@ class RoutingTable {
 		let aboveIndex = bucketIndex + 1;
 		let belowIndex = bucketIndex - 1;
 
-		const canIterateAbove = () => {
-			return aboveIndex !== HASH_SIZE; // 159
-		};
-
-		const canIterateBelow = () => {
-			return belowIndex >= 0;
-		};
-
-		while (true) {
-			if (closestNodes.length === count || (!canIterateBelow() && !canIterateAbove())) {
-				break;
-			}
-
-			while (canIterateAbove()) {
-				if (this.buckets.has(aboveIndex)) {
-					this.addNodes(key, aboveIndex, closestNodes);
-					aboveIndex++;
-					break;
-				}
+		while (closestNodes.length < count && (aboveIndex < HASH_SIZE || belowIndex >= 0)) {
+			if (aboveIndex < HASH_SIZE && this.buckets.has(aboveIndex)) {
+				this.addNodes(key, aboveIndex, closestNodes);
+				aboveIndex++;
+			} else {
 				aboveIndex++;
 			}
 
-			while (canIterateBelow()) {
-				if (this.buckets.has(belowIndex)) {
-					this.addNodes(key, belowIndex, closestNodes);
-					belowIndex--;
-					break;
-				}
+			if (belowIndex >= 0 && this.buckets.has(belowIndex)) {
+				this.addNodes(key, belowIndex, closestNodes);
+				belowIndex--;
+			} else {
 				belowIndex--;
 			}
 		}

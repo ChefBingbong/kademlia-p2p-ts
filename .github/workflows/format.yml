@@ -2,41 +2,30 @@ name: Format
 
 on:
   workflow_dispatch:
-  pull_request:
+  pull_request:     
+    types:
+      - opened        
+      - synchronize   
+      - reopened      
   push:
     branches:
       - develop
+      - main
       - master
-
+      - quartz-labs:main
 jobs:
-  format:
-
-    name: Prettier
+  code:
     runs-on: ubuntu-latest
+    timeout-minutes: 6
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
         with:
-          node-version: 18.x
-
-      - name: Get pnpm cache directory path
-        id: pnpm-cache-dir-path
-        run: echo "::set-output name=dir::$(pnpm store path)"
-
-      - uses: actions/cache@v4
-        id: pnpm-cache
-        with:
-          path: ${{ steps.pnpm-cache-dir-path.outputs.dir }}
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
+          fetch-depth: 2
 
       - name: Install dependencies
-        run: pnpm install
+        uses: './.github/actions/install-deps'
 
-      - name: Run Prettier
+      - name: Run Biome
         run: pnpm format:check

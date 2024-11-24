@@ -4,7 +4,7 @@
 	"description": "",
 	"main": "index.js",
 	"type": "commonjs",
-	"packageManager": "pnpm@9.8.0",
+	"packageManager": "pnpm@9.12.1",
 	"scripts": {
 		"build": "tsc",
 		"start": "npx ts-node src/index.ts",
@@ -16,12 +16,7 @@
 		"prepare": "husky install",
 		"test": "vitest run --pool=forks"
 	},
-	"keywords": [
-		"kademlia",
-		"p2p",
-		"dht",
-		"ws"
-	],
+	"keywords": ["kademlia", "p2p", "dht", "ws"],
 	"author": "zeroExBingbong",
 	"license": "ISC",
 	"dependencies": {

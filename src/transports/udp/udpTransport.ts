@@ -53,7 +53,7 @@ class UDPTransport extends AbstractTransport<dgram.Socket, BaseMessageType> {
 			const error = new Error(`TIMEOUT: ${message.to.port} ${message.type}`);
 			return Promise.race([nodeResponse, timeoutReject<Peer[]>(error)]);
 		} catch (error) {
-			console.error(`message: ${extractError(error)}, fn: sendMessage UDPTransport`);
+			this.log.error(`message: ${extractError(error)}, fn: sendMessage UDPTransport`);
 			return [] as Peer[];
 		}
 	};

@@ -64,7 +64,8 @@
 		"lint-staged": "^15.2.9",
 		"ts-jest": "^29.2.4",
 		"typescript": "^5.1.3",
-		"cross-spawn": ">=7.0.5"
+		"cross-spawn": ">=7.0.5",
+		"cookie": ">=0.7.0"
 	},
 	"engines": {
 		"node": "^18.0.0"

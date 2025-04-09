@@ -1,5 +1,3 @@
-**implementation of the the Kademlia distributed hash table algorithm in typescript. this repo is currenly a work in prgress**
-
 # Kademlia DHT Implementation
 
 This repository contains an implementation of the Kademlia Distributed Hash Table (DHT), a foundational component in many peer-to-peer (P2P) systems like BitTorrent, IPFS, and others. Kademlia provides a way for nodes in a distributed network to efficiently locate resources without the need for centralized servers.
